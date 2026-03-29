@@ -5,13 +5,13 @@
 Build a robust Rust-based foundation for R tooling with this implementation
 order.
 
-- [ ] Parser/CST foundation (for all future features)
+- [x] Parser/CST foundation (initial bootstrap completed; continue expanding)
 - [ ] Formatter (first consumer)
 - [ ] Linter and language server integration (later phases)
 
 ## Architecture decisions
 
-- [ ] Use a **lossless CST** built with `rowan` (preserve all tokens and
+- [x] Use a **lossless CST** built with `rowan` (preserve all tokens and
       trivia).
 - [ ] Use a **hand-written parser**:
       - [ ] recursive descent for structural forms
@@ -26,14 +26,15 @@ order.
 
 ## Phase 0: Parser foundations
 
-- [ ] Define token kinds and syntax kinds with room for all R operators and
-      delimiters.
+- [x] Define initial token kinds and syntax kinds (expand for full R operator
+      surface in next iterations).
 - [ ] Implement a lossless lexer:
-      - [ ] preserve whitespace/comments/newlines
+      - [x] preserve whitespace/newlines
+      - [ ] preserve comments
       - [ ] lex `%...%` operators as single tokens
       - [ ] distinguish `[[` and `]]` cleanly
-- [ ] Build parser infrastructure:
-      - [ ] token source
+- [x] Build initial parser infrastructure:
+      - [x] token source (minimal, lexer-backed)
       - [ ] event sink
       - [ ] marker/checkpoint utilities
       - [ ] parser diagnostics container
@@ -55,11 +56,21 @@ order.
 
 ## Phase 3: Rowan CST + validation
 
-- [ ] Lower events into rowan green tree and expose typed CST wrappers.
-- [ ] Guarantee losslessness by round-trip checks (source -> CST -> source
+- [x] Build direct rowan CST construction and expose debug-tree output.
+
+- [x] Guarantee losslessness by round-trip checks (source -> CST -> source
       text).
-- [ ] Add snapshot-style CST tests for representative R files and malformed
-      snippets.
+
+- [x] Add snapshot-style CST tests for initial fixture corpus (expand to broader
+      representative/malformed set next).
+
+## Phase 3.5: CLI bootstrap
+
+- [x] Expose parse CLI surface (`ravel parse [file] [--quiet] [--verify]`).
+
+- [x] Support parsing from file path or stdin.
+
+- [x] Wire `--verify` to parser losslessness invariant.
 
 ## Phase 4: Incremental and project model (`salsa`)
 
