@@ -6,10 +6,14 @@
 - Build (release): `cargo build --release`
 - Run tests: `cargo test`
 - Run one test by name: `cargo test <test_name_substring>`
+- Run parser snapshot tests only: `cargo test --test parser_snapshots`
 - Run tests with logs:
   - Debug: `RUST_LOG=debug cargo test`
   - Parser trace: `RUST_LOG=panache::parser=trace cargo test`
   - Quiet logs: `RUST_LOG=off cargo test`
+- Review/accept `insta` snapshots:
+  - `cargo insta review`
+  - `cargo insta accept`
 - Lint: `cargo clippy --all-targets --all-features -- -D warnings`
 - Format check: `cargo fmt -- --check`
 
@@ -45,3 +49,4 @@ Taskfile equivalents:
 - Logging-based test debugging is expected via `RUST_LOG` levels (normal/debug/trace/off) rather than ad-hoc test harness changes.
 - Security/dependency checks (`cargo-audit`, `cargo-deny`) are part of standard CI, so dependency changes should remain compatible with both.
 - For parser work, optimize for stable, recoverable CST shape and losslessness over early semantic precision.
+- `SyntaxKind` variants follow rowan-style `SCREAMING_SNAKE_CASE`.
