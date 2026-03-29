@@ -1,0 +1,37 @@
+version: "3"
+
+tasks:
+  lint:
+    desc: Run linter
+    cmds:
+      - cargo clippy --all-targets --all-features -- -D warnings
+
+  format:
+    desc: Check code formatting
+    cmds:
+      - cargo fmt --
+
+  build-release:
+    desc: Build release version
+    cmds:
+      - cargo build --release
+
+  test:
+    desc: Run tests
+    cmds:
+      - cargo test
+
+  test-debug:
+    desc: Run tests with debug logging
+    cmds:
+      - RUST_LOG=debug cargo test
+
+  test-trace:
+    desc: Run tests with trace logging for parser
+    cmds:
+      - RUST_LOG=panache::parser=trace cargo test
+
+  test-quiet:
+    desc: Run tests quietly (no debug output)
+    cmds:
+      - RUST_LOG=off cargo test
