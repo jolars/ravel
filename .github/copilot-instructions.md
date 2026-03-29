@@ -7,6 +7,8 @@
 - Run tests: `cargo test`
 - Run one test by name: `cargo test <test_name_substring>`
 - Run parser snapshot tests only: `cargo test --test parser_snapshots`
+- Run parse CLI on a file: `cargo run -- parse <path/to/file.R>`
+- Parse stdin and verify losslessness: `cat file.R | cargo run -- parse --verify --quiet`
 - Run tests with logs:
   - Debug: `RUST_LOG=debug cargo test`
   - Parser trace: `RUST_LOG=panache::parser=trace cargo test`
