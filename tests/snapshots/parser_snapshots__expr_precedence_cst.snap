@@ -1,0 +1,17 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..10
+  BINARY_EXPR@0..9
+    INT@0..1 "1"
+    WHITESPACE@1..2 " "
+    PLUS@2..3 "+"
+    WHITESPACE@3..4 " "
+    BINARY_EXPR@4..9
+      INT@4..5 "2"
+      WHITESPACE@5..6 " "
+      STAR@6..7 "*"
+      WHITESPACE@7..8 " "
+      INT@8..9 "3"
+  NEWLINE@9..10 "\n"

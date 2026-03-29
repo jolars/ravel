@@ -1,0 +1,10 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..7
+  IDENT@0..1 "x"
+  LBRACK2@1..3 "[["
+  INT@3..4 "1"
+  RBRACK2@4..6 "]]"
+  NEWLINE@6..7 "\n"

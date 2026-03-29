@@ -1,0 +1,10 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..4
+  ERROR@0..4
+    INT@0..1 "1"
+    WHITESPACE@1..2 " "
+    PLUS@2..3 "+"
+    NEWLINE@3..4 "\n"

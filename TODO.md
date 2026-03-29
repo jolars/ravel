@@ -15,8 +15,8 @@ order.
       trivia).
 - [ ] Use a **hand-written parser**:
       - [ ] recursive descent for structural forms
-      - [ ] Pratt parser for expressions and operator precedence
-- [ ] Use an **event-based parser pipeline** (`start node` / `token` /
+- [x] Pratt parser for expressions and operator precedence
+- [x] Use an **event-based parser pipeline** (`start node` / `token` /
       `finish node`) and then lower into rowan.
 - [ ] Keep semantics **static** (no R code evaluation).
 - [ ] Use `salsa` for file text and parse caching first; expand to dependency
@@ -30,21 +30,24 @@ order.
       surface in next iterations).
 - [ ] Implement a lossless lexer:
       - [x] preserve whitespace/newlines
-      - [ ] preserve comments
-      - [ ] lex `%...%` operators as single tokens
-      - [ ] distinguish `[[` and `]]` cleanly
+      - [x] preserve comments
+      - [x] lex `%...%` operators as single tokens
+      - [x] distinguish `[[` and `]]` cleanly
 - [x] Build initial parser infrastructure:
       - [x] token source (minimal, lexer-backed)
       - [ ] event sink
       - [ ] marker/checkpoint utilities
-      - [ ] parser diagnostics container
+      - [x] parser diagnostics container (initial assignment error coverage)
 
 ## Phase 1: Expression parsing
 
-- [ ] Implement Pratt parser with explicit binding powers and associativity.
-- [ ] Cover prefix/infix/postfix patterns used in R expressions.
-- [ ] Handle right-associative assignment chains and custom infix operators.
-- [ ] Add focused parser tests per operator group.
+- [x] Implement Pratt parser skeleton with explicit binding powers and
+      associativity (`+`, `*`, `^`).
+- [x] Cover infix precedence and parenthesized expression baseline.
+- [x] Handle right-associative power (`^`) and assignment integration
+      (`a <- 1 + 2`).
+- [x] Add focused parser tests per operator group, including malformed infix
+      cases (`1 +`, `* 2`).
 
 ## Phase 2: Structural forms and statements
 
@@ -63,6 +66,10 @@ order.
 
 - [x] Add snapshot-style CST tests for initial fixture corpus (expand to broader
       representative/malformed set next).
+- [x] Expand fixture corpus for lexer coverage (comments, strings, floats,
+      `%...%`, `[[`/`]]`) with snapshots and losslessness checks.
+- [x] Snapshot parser diagnostics per fixture, including malformed input
+      (`assignment_missing_rhs`).
 
 ## Phase 3.5: CLI bootstrap
 

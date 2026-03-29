@@ -1,0 +1,7 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..10
+  COMMENT@0..9 "# comment"
+  NEWLINE@9..10 "\n"

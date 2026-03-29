@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use ravel::cli::{Cli, Commands};
-use ravel::parser::{debug_tree, reconstruct};
+use ravel::parser::{parse, reconstruct};
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -27,8 +27,17 @@ fn run_parse(file: Option<std::path::PathBuf>, quiet: bool, verify: bool) -> Exi
         }
     };
 
+    let parse_output = parse(&input);
+
     if !quiet {
-        println!("{}", debug_tree(&input));
+        println!("{:#?}", parse_output.cst);
+    }
+
+    if !parse_output.diagnostics.is_empty() {
+        for diag in &parse_output.diagnostics {
+            eprintln!("error[{}..{}]: {}", diag.start, diag.end, diag.message);
+        }
+        return ExitCode::from(1);
     }
 
     if verify {

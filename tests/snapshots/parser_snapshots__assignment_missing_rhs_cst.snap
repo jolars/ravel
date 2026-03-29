@@ -2,11 +2,9 @@
 source: tests/parser_snapshots.rs
 expression: tree
 ---
-ROOT@0..7
-  ASSIGNMENT_EXPR@0..6
+ROOT@0..5
+  ERROR@0..5
     IDENT@0..1 "a"
     WHITESPACE@1..2 " "
     ASSIGN_LEFT@2..4 "<-"
-    WHITESPACE@4..5 " "
-    INT@5..6 "1"
-  NEWLINE@6..7 "\n"
+    NEWLINE@4..5 "\n"
