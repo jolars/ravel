@@ -57,6 +57,17 @@ order.
 - [ ] Handle ambiguous contexts such as `=` in argument lists vs assignment.
 - [x] Add recovery rules that keep CST shape stable after syntax errors.
 
+## Phase 2.5: Parsing completeness and hardening
+
+- [ ] Expand operator/assignment coverage (`=`, `<<-`, `->`, `->>`, `:=`) with
+      explicit precedence and associativity decisions.
+- [ ] Formalize newline-sensitive statement boundary behavior for edge cases
+      (continuations, dangling constructs, nested forms).
+- [ ] Add targeted parsing fixtures for ambiguous contexts (argument defaults,
+      named arguments, chained assignments, mixed control-flow/assignment forms).
+- [ ] Consolidate parser diagnostics for consistency (message style, span
+      precision, recovery node shape guarantees).
+
 ## Phase 3: Rowan CST + validation
 
 - [x] Build direct rowan CST construction and expose debug-tree output.
@@ -101,6 +112,17 @@ order.
       semantics.
 - [x] Add stable formatting tests (idempotence and regression suites).
 - [x] Expose formatter CLI surface (`format`, `--check`).
+
+## Phase 5.2: Formatter v2 quality and coverage
+
+- [ ] Expand formatter coverage for additional parsed constructs and edge cases
+      while preserving comments/trivia.
+- [ ] Add configurable formatting knobs aligned with `ravel.toml` defaults
+      (line width, indentation, selected style toggles).
+- [ ] Improve stability/perf with larger fixture corpus and deterministic output
+      across multi-file runs.
+- [ ] Add migration/regression tests to ensure v2 changes remain predictable and
+      safe.
 
 ## Phase 5.5: Project configuration (TOML, Ruff-inspired)
 
