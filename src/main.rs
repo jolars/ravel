@@ -5,9 +5,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use ravel::cli::{Cli, Commands};
-use ravel::format_check::check_paths;
 use ravel::formatter::format;
-use ravel::lint_check::check_paths as lint_check_paths;
 use ravel::parser::{parse, reconstruct};
 
 fn main() -> ExitCode {
@@ -110,7 +108,7 @@ fn run_format(paths: Vec<PathBuf>, verify: bool, check: bool) -> ExitCode {
 }
 
 fn run_format_check(paths: &[PathBuf]) -> ExitCode {
-    match check_paths(paths) {
+    match ravel::formatter::check_paths(paths) {
         Ok(result) => {
             if result.changed_files.is_empty() {
                 ExitCode::SUCCESS
@@ -136,17 +134,17 @@ fn run_lint(paths: Vec<PathBuf>, check: bool) -> ExitCode {
         return ExitCode::from(2);
     }
 
-    match lint_check_paths(&paths) {
+    match ravel::linter::check_paths(&paths) {
         Ok(result) => {
             for report in result.reports {
                 match report.status {
-                    ravel::lint_check::LintStatus::RulesNotImplemented => {
+                    ravel::linter::LintStatus::RulesNotImplemented => {
                         eprintln!(
                             "lint not yet implemented: {} (parsed successfully)",
                             report.path.display()
                         );
                     }
-                    ravel::lint_check::LintStatus::ParseDiagnostics { count } => {
+                    ravel::linter::LintStatus::ParseDiagnostics { count } => {
                         eprintln!(
                             "lint blocked by parse diagnostics: {} ({} diagnostic{})",
                             report.path.display(),

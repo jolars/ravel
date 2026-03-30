@@ -1,6 +1,6 @@
 use std::process::{Command, Stdio};
 
-use ravel::lint_check::{LintStatus, check_paths};
+use ravel::linter::{LintStatus, check_paths};
 use tempfile::tempdir;
 
 #[test]

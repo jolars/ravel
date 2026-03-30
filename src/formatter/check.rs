@@ -3,8 +3,8 @@ use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 
+use super::{FormatError, format};
 use crate::file_discovery::{FileDiscoveryError, collect_r_files};
-use crate::formatter;
 use crate::incremental::{IncrementalDatabase, SourceFile};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,21 +17,10 @@ pub struct CheckResult {
 pub enum CheckError {
     MissingPaths,
     NoRFiles,
-    NonRFilePath {
-        path: PathBuf,
-    },
-    WalkError {
-        path: PathBuf,
-        message: String,
-    },
-    ReadError {
-        path: PathBuf,
-        source: String,
-    },
-    FormatError {
-        path: PathBuf,
-        source: formatter::FormatError,
-    },
+    NonRFilePath { path: PathBuf },
+    WalkError { path: PathBuf, message: String },
+    ReadError { path: PathBuf, source: String },
+    FormatError { path: PathBuf, source: FormatError },
 }
 
 impl fmt::Display for CheckError {
@@ -110,7 +99,7 @@ pub fn check_paths(paths: &[PathBuf]) -> Result<CheckResult, CheckError> {
         };
 
         let _ = db.parse(file);
-        let formatted = formatter::format(&content).map_err(|err| CheckError::FormatError {
+        let formatted = format(&content).map_err(|err| CheckError::FormatError {
             path: path.clone(),
             source: err,
         })?;
