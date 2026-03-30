@@ -16,9 +16,9 @@ Current behavior:
 - rejects unsupported/ambiguous constructs (for example `%...%`, `[[`, `]]`) with explicit errors
 - `--check` scans provided file/directory paths for `.R` files and exits non-zero when any file would be reformatted
 
-## Linter (skeleton)
+## Linter
 
-Ravel includes an explicit lint skeleton via:
+Ravel includes linting via:
 
 - `ravel lint --check <path> [<path> ...]`
 
@@ -26,7 +26,11 @@ Current behavior:
 
 - reuses `.R` file discovery and parser/incremental plumbing
 - parses each discovered `.R` file
+- implements `assignment-spacing`: reports when `<-` is not surrounded by exactly one space on each side
+  - reports: `x<-1`, `x  <-1`, `x<- 1`
+  - passes: `x <- 1`
+- emits deterministic diagnostics as `<path>:<line>:<column>: [assignment-spacing] ... (span <start>..<end>)`
 - reports one of:
+  - lint findings for violated rules
   - `lint blocked by parse diagnostics: <file> (...)` when parsing fails
-  - `lint not yet implemented: <file> (parsed successfully)` when parsing succeeds
-- exits non-zero until lint rules are implemented
+- exits non-zero when lint findings exist or parsing blocks linting

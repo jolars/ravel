@@ -128,23 +128,34 @@ fn run_format_check(paths: &[PathBuf]) -> ExitCode {
 
 fn run_lint(paths: Vec<PathBuf>, check: bool) -> ExitCode {
     if !check {
-        eprintln!(
-            "error: lint currently requires --check while lint rules are not implemented yet"
-        );
+        eprintln!("error: lint currently requires --check");
         return ExitCode::from(2);
     }
 
     match ravel::linter::check_paths(&paths) {
         Ok(result) => {
+            let mut has_parse_blockers = false;
+            let mut has_findings = false;
             for report in result.reports {
                 match report.status {
-                    ravel::linter::LintStatus::RulesNotImplemented => {
-                        eprintln!(
-                            "lint not yet implemented: {} (parsed successfully)",
-                            report.path.display()
-                        );
+                    ravel::linter::LintStatus::Clean => {}
+                    ravel::linter::LintStatus::Findings { .. } => {
+                        has_findings = true;
+                        for diagnostic in report.diagnostics {
+                            eprintln!(
+                                "{}:{}:{}: [{}] {} (span {}..{})",
+                                diagnostic.path.display(),
+                                diagnostic.line,
+                                diagnostic.column,
+                                diagnostic.rule_id,
+                                diagnostic.message,
+                                diagnostic.start,
+                                diagnostic.end
+                            );
+                        }
                     }
                     ravel::linter::LintStatus::ParseDiagnostics { count } => {
+                        has_parse_blockers = true;
                         eprintln!(
                             "lint blocked by parse diagnostics: {} ({} diagnostic{})",
                             report.path.display(),
@@ -154,7 +165,12 @@ fn run_lint(paths: Vec<PathBuf>, check: bool) -> ExitCode {
                     }
                 }
             }
-            ExitCode::from(1)
+
+            if has_parse_blockers || has_findings {
+                ExitCode::from(1)
+            } else {
+                ExitCode::SUCCESS
+            }
         }
         Err(err) => {
             eprintln!("error: {err}");
