@@ -35,3 +35,8 @@ tasks:
     desc: Run tests quietly (no debug output)
     cmds:
       - RUST_LOG=off cargo test
+
+  docs-preview:
+    desc: Preview documentation site locally
+    cmds:
+      - cd docs && quarto preview --no-browser

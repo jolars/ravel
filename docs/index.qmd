@@ -1,0 +1,54 @@
+---
+title: "Panache"
+title-meta: "Panache: Language Server, Formatter, and Linter for R"
+description-meta: >-
+  Ravel is a language server, formatter, and linter for R.
+title-prefix: ""
+# image: images/og.png
+# image-alt: "Panache logo"
+
+open-graph:
+  title: "Ravel: Language Server, Formatter, and Linter for R"
+
+twitter-card:
+  title: "Ravel: Language Server, Formatter, and Linter for R"
+
+format:
+  html:
+    toc: false
+---
+
+<!-- <img src="images/logo.svg" alt="Ravel logo" class="float-end ms-3" -->
+<!-- style="max-width: 20%; height: auto;"> -->
+
+Ravel is a language server, formatter, and linter for R.
+
+<div style="clear: both;"></div>
+
+## Quick Start
+
+Install with Cargo:
+
+```bash
+cargo install ravel
+```
+
+Format your first document:
+
+```bash
+ravel format file.R
+```
+
+Run lint checks:
+
+```bash
+ravel lint file.R
+```
+
+For full installation options (prebuilt binaries, package managers, and source
+builds), see [Getting Started](getting-started.qmd).
+
+## Where to Go Next
+
+- [Getting Started](getting-started.qmd): complete installation and first-run
+  walkthrough.
