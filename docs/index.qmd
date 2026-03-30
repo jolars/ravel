@@ -1,11 +1,11 @@
 ---
-title: "Panache"
-title-meta: "Panache: Language Server, Formatter, and Linter for R"
+title: "Ravel"
+title-meta: "Ravel: Language Server, Formatter, and Linter for R"
 description-meta: >-
   Ravel is a language server, formatter, and linter for R.
 title-prefix: ""
-# image: images/og.png
-# image-alt: "Panache logo"
+image: images/logo.svg
+image-alt: "Ravel logo"
 
 open-graph:
   title: "Ravel: Language Server, Formatter, and Linter for R"

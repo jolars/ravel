@@ -34,10 +34,8 @@ website:
         aria-label: "Source for this webpage"
 
   navbar:
-    # logo:
-    #   light: images/logo-with-text.svg
-    #   dark: images/logo-with-text-dark.svg
-    # logo-alt: "Ravel logo"
+    logo: images/logo-with-text.svg
+    logo-alt: "Ravel logo"
 
     title: false
 
@@ -59,14 +57,14 @@ website:
             icon: "chat-right-text"
             href: "https://github.com/jolars/ravel/discussions"
 
-resources:
-  # - "apple-touch-icon.png"
-  # - "favicon-96x96.png"
-  # - "favicon.ico"
-  # - "favicon.svg"
-  # - "site.webmanifest"
-  # - "web-app-manifest-192x192.png"
-  # - "web-app-manifest-512x512.png"
+# resources:
+# - "apple-touch-icon.png"
+# - "favicon-96x96.png"
+# - "favicon.ico"
+# - "favicon.svg"
+# - "site.webmanifest"
+# - "web-app-manifest-192x192.png"
+# - "web-app-manifest-512x512.png"
 
 highlight-style: breeze
 
