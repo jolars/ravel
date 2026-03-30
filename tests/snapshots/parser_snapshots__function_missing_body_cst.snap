@@ -1,0 +1,12 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..12
+  FUNCTION_EXPR@0..12
+    FUNCTION_KW@0..8 "function"
+    LPAREN@8..9 "("
+    IDENT@9..10 "x"
+    RPAREN@10..11 ")"
+    NEWLINE@11..12 "\n"
+    ERROR@12..12

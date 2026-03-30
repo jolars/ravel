@@ -2,6 +2,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use ravel::formatter::{FormatError, format};
+use tempfile::tempdir;
 
 #[test]
 fn formats_assignment_binary_and_paren_stably() {
@@ -50,7 +51,62 @@ fn cli_format_reports_unsupported_constructs() {
     let output = run_cli(["format"], "x %foo% y\n");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("unsupported construct for formatter v1"));
+    assert!(stderr.contains("unsupported construct for formatter"));
+}
+
+#[test]
+fn cli_format_check_reports_changed_files() {
+    let dir = tempdir().expect("failed to create temp dir");
+    let changed = dir.path().join("changed.R");
+    let unchanged = dir.path().join("unchanged.R");
+
+    std::fs::write(&changed, "x<-1+2\n").expect("failed to write changed file");
+    std::fs::write(&unchanged, "x <- 1 + 2\n").expect("failed to write unchanged file");
+
+    let output = run_cli_no_stdin([
+        "format",
+        "--check",
+        dir.path().to_str().expect("temp dir path should be utf-8"),
+    ]);
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("would reformat:"));
+    assert!(stderr.contains("changed.R"));
+    assert!(!stderr.contains("unchanged.R"));
+}
+
+#[test]
+fn cli_format_check_succeeds_for_unchanged_files() {
+    let dir = tempdir().expect("failed to create temp dir");
+    let unchanged = dir.path().join("unchanged.R");
+    std::fs::write(&unchanged, "x <- 1 + 2\n").expect("failed to write unchanged file");
+
+    let output = run_cli_no_stdin([
+        "format",
+        "--check",
+        dir.path().to_str().expect("temp dir path should be utf-8"),
+    ]);
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn cli_format_check_requires_paths() {
+    let output = run_cli_no_stdin(["format", "--check"]);
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--check requires at least one input path"));
+}
+
+#[test]
+fn cli_format_check_disallows_verify() {
+    let output = run_cli_no_stdin(["format", "--check", "--verify", "."]);
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--verify cannot be combined with --check"));
 }
 
 fn run_cli<const N: usize>(args: [&str; N], stdin_input: &str) -> std::process::Output {
@@ -68,4 +124,14 @@ fn run_cli<const N: usize>(args: [&str; N], stdin_input: &str) -> std::process::
     drop(stdin);
 
     child.wait_with_output().expect("failed to wait for cli")
+}
+
+fn run_cli_no_stdin<const N: usize>(args: [&str; N]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_ravel"))
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("failed to run cli")
 }

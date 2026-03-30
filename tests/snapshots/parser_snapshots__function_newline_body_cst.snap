@@ -1,0 +1,27 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..27
+  FUNCTION_EXPR@0..26
+    FUNCTION_KW@0..8 "function"
+    LPAREN@8..9 "("
+    IDENT@9..10 "x"
+    ERROR@10..11 ","
+    WHITESPACE@11..12 " "
+    IDENT@12..13 "y"
+    RPAREN@13..14 ")"
+    NEWLINE@14..15 "\n"
+    BLOCK_EXPR@15..26
+      LBRACE@15..16 "{"
+      NEWLINE@16..17 "\n"
+      WHITESPACE@17..19 "  "
+      BINARY_EXPR@19..24
+        IDENT@19..20 "x"
+        WHITESPACE@20..21 " "
+        PLUS@21..22 "+"
+        WHITESPACE@22..23 " "
+        IDENT@23..24 "y"
+      NEWLINE@24..25 "\n"
+      RBRACE@25..26 "}"
+  NEWLINE@26..27 "\n"

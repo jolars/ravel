@@ -36,13 +36,28 @@ pub enum Commands {
         #[arg(long)]
         verify: bool,
     },
-    /// Formatter v1 for currently supported parseable syntax
+    /// Formatter for currently supported parseable syntax
     Format {
-        /// Input file (stdin if not provided)
-        file: Option<PathBuf>,
+        /// Input file or path (stdin if omitted and --check is not set)
+        #[arg(value_name = "PATH")]
+        paths: Vec<PathBuf>,
 
         /// Verify formatting idempotence for supported inputs
         #[arg(long)]
         verify: bool,
+
+        /// Check formatting of .R files under the provided paths
+        #[arg(long)]
+        check: bool,
+    },
+    /// Lint .R files (rules not implemented yet)
+    Lint {
+        /// Input file or path; required with --check
+        #[arg(value_name = "PATH")]
+        paths: Vec<PathBuf>,
+
+        /// Check .R files under the provided paths
+        #[arg(long)]
+        check: bool,
     },
 }

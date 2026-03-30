@@ -1,0 +1,28 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..28
+  FOR_EXPR@0..27
+    FOR_KW@0..3 "for"
+    WHITESPACE@3..4 " "
+    LPAREN@4..5 "("
+    IDENT@5..6 "i"
+    WHITESPACE@6..7 " "
+    IN_KW@7..9 "in"
+    WHITESPACE@9..10 " "
+    IDENT@10..15 "items"
+    RPAREN@15..16 ")"
+    WHITESPACE@16..17 " "
+    ASSIGNMENT_EXPR@17..27
+      IDENT@17..18 "i"
+      WHITESPACE@18..19 " "
+      ASSIGN_LEFT@19..21 "<-"
+      WHITESPACE@21..22 " "
+      BINARY_EXPR@22..27
+        IDENT@22..23 "i"
+        WHITESPACE@23..24 " "
+        PLUS@24..25 "+"
+        WHITESPACE@25..26 " "
+        INT@26..27 "1"
+  NEWLINE@27..28 "\n"

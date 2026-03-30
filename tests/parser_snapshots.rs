@@ -58,6 +58,18 @@ fn fixture_names() -> &'static [&'static str] {
         "if_missing_then_expr",
         "if_missing_else_expr",
         "if_dangling_else",
+        "for_simple",
+        "for_newline_body",
+        "for_missing_in",
+        "for_missing_rparen",
+        "while_simple",
+        "while_newline_body",
+        "while_missing_condition",
+        "while_missing_rparen",
+        "function_simple",
+        "function_newline_body",
+        "function_missing_body",
+        "function_missing_rparen_body",
         "unclosed_block",
     ]
 }

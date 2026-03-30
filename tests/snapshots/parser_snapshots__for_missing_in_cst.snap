@@ -1,0 +1,17 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..16
+  FOR_EXPR@0..15
+    FOR_KW@0..3 "for"
+    WHITESPACE@3..4 " "
+    LPAREN@4..5 "("
+    IDENT@5..6 "i"
+    WHITESPACE@6..7 " "
+    ERROR@7..7
+    IDENT@7..12 "items"
+    RPAREN@12..13 ")"
+    WHITESPACE@13..14 " "
+    IDENT@14..15 "i"
+  NEWLINE@15..16 "\n"

@@ -23,18 +23,18 @@ impl std::fmt::Display for FormatError {
         match self {
             Self::ParseErrors { count } => write!(
                 f,
-                "input contains {count} parser diagnostic(s); formatter v1 only supports parseable input"
+                "input contains {count} parser diagnostic(s); formatter only supports parseable input"
             ),
             Self::UnsupportedConstruct { kind, snippet } => {
                 write!(
                     f,
-                    "unsupported construct for formatter v1: {kind:?} near {snippet:?}"
+                    "unsupported construct for formatter: {kind:?} near {snippet:?}"
                 )
             }
             Self::AmbiguousConstruct { context, snippet } => {
                 write!(
                     f,
-                    "ambiguous construct for formatter v1 ({context}): {snippet:?}"
+                    "ambiguous construct for formatter ({context}): {snippet:?}"
                 )
             }
         }

@@ -1,0 +1,24 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..30
+  WHILE_EXPR@0..29
+    WHILE_KW@0..5 "while"
+    WHITESPACE@5..6 " "
+    LPAREN@6..7 "("
+    IDENT@7..11 "flag"
+    RPAREN@11..12 ")"
+    WHITESPACE@12..13 " "
+    ASSIGNMENT_EXPR@13..29
+      IDENT@13..17 "flag"
+      WHITESPACE@17..18 " "
+      ASSIGN_LEFT@18..20 "<-"
+      WHITESPACE@20..21 " "
+      BINARY_EXPR@21..29
+        IDENT@21..25 "flag"
+        WHITESPACE@25..26 " "
+        PLUS@26..27 "+"
+        WHITESPACE@27..28 " "
+        INT@28..29 "1"
+  NEWLINE@29..30 "\n"

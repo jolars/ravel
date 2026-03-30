@@ -24,6 +24,10 @@ enum TokKind {
     Comment,
     IfKw,
     ElseKw,
+    ForKw,
+    WhileKw,
+    FunctionKw,
+    InKw,
     UserOp,
     LBrack2,
     RBrack2,
@@ -109,6 +113,24 @@ fn parse_expr(
         Some(TokKind::IfKw)
     ) {
         return parse_if_expr(tokens, start_non_ws, diagnostics);
+    }
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::ForKw)
+    ) {
+        return parse_for_expr(tokens, start_non_ws, diagnostics);
+    }
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::WhileKw)
+    ) {
+        return parse_while_expr(tokens, start_non_ws, diagnostics);
+    }
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::FunctionKw)
+    ) {
+        return parse_function_expr(tokens, start_non_ws, diagnostics);
     }
 
     let mut lhs = parse_prefix(tokens, start, diagnostics)?;
@@ -225,7 +247,7 @@ fn parse_if_expr(
     let if_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::IF_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let mut cond_start = skip_ws(tokens, cursor);
+    let mut cond_start = skip_ws_and_newlines(tokens, cursor);
     let mut saw_lparen = false;
 
     if matches!(
@@ -263,7 +285,7 @@ fn parse_if_expr(
     }
 
     if saw_lparen {
-        let cond_rparen = skip_ws(tokens, cursor);
+        let cond_rparen = skip_ws_and_newlines(tokens, cursor);
         if matches!(
             tokens.get(cond_rparen).map(|t| &t.kind),
             Some(TokKind::RParen)
@@ -280,7 +302,8 @@ fn parse_if_expr(
         }
     }
 
-    if let Some(then_expr) = parse_expr(tokens, cursor, 0, diagnostics) {
+    let then_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(then_expr) = parse_expr(tokens, then_start, 0, diagnostics) {
         push_range(&mut events, cursor, then_expr.start);
         events.extend(then_expr.events);
         cursor = then_expr.end;
@@ -290,7 +313,7 @@ fn parse_if_expr(
             start: if_tok.start,
             end: if_tok.end,
         });
-        let recovery = skip_ws(tokens, cursor);
+        let recovery = skip_ws_and_newlines(tokens, cursor);
         push_range(&mut events, cursor, recovery);
         events.push(Event::Start(SyntaxKind::ERROR));
         events.push(Event::Finish);
@@ -319,6 +342,309 @@ fn parse_if_expr(
             events.push(Event::Finish);
             cursor = recovery;
         }
+    }
+
+    events.push(Event::Finish);
+    Some(ExprParse {
+        start,
+        end: cursor,
+        events,
+    })
+}
+
+fn parse_while_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let while_tok = tokens.get(start)?;
+    let mut events = vec![Event::Start(SyntaxKind::WHILE_EXPR), Event::Tok(start)];
+    let mut cursor = start + 1;
+    let mut cond_start = skip_ws_and_newlines(tokens, cursor);
+    let mut saw_lparen = false;
+
+    if matches!(
+        tokens.get(cond_start).map(|t| &t.kind),
+        Some(TokKind::LParen)
+    ) {
+        push_range(&mut events, cursor, cond_start);
+        events.push(Event::Tok(cond_start));
+        cursor = cond_start + 1;
+        cond_start = cursor;
+        saw_lparen = true;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected '(' after 'while'".to_string(),
+            start: while_tok.start,
+            end: while_tok.end,
+        });
+        push_range(&mut events, cursor, cond_start);
+        cursor = cond_start;
+    }
+
+    if let Some(cond) = parse_expr(tokens, cond_start, 0, diagnostics) {
+        push_range(&mut events, cursor, cond.start);
+        events.extend(cond.events);
+        cursor = cond.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected condition expression after 'while'".to_string(),
+            start: while_tok.start,
+            end: while_tok.end,
+        });
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = cond_start;
+    }
+
+    if saw_lparen {
+        let cond_rparen = skip_ws_and_newlines(tokens, cursor);
+        if matches!(
+            tokens.get(cond_rparen).map(|t| &t.kind),
+            Some(TokKind::RParen)
+        ) {
+            push_range(&mut events, cursor, cond_rparen);
+            events.push(Event::Tok(cond_rparen));
+            cursor = cond_rparen + 1;
+        } else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected ')' after while condition".to_string(),
+                start: while_tok.start,
+                end: while_tok.end,
+            });
+            events.push(Event::Start(SyntaxKind::ERROR));
+            events.push(Event::Finish);
+        }
+    }
+
+    let body_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
+        push_range(&mut events, cursor, body_expr.start);
+        events.extend(body_expr.events);
+        cursor = body_expr.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected expression after while condition".to_string(),
+            start: while_tok.start,
+            end: while_tok.end,
+        });
+        let recovery = skip_ws_and_newlines(tokens, cursor);
+        push_range(&mut events, cursor, recovery);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = recovery;
+    }
+
+    events.push(Event::Finish);
+    Some(ExprParse {
+        start,
+        end: cursor,
+        events,
+    })
+}
+
+fn parse_for_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let for_tok = tokens.get(start)?;
+    let mut events = vec![Event::Start(SyntaxKind::FOR_EXPR), Event::Tok(start)];
+    let mut cursor = start + 1;
+    let clause_start = skip_ws_and_newlines(tokens, cursor);
+    let mut saw_lparen = false;
+
+    if matches!(
+        tokens.get(clause_start).map(|t| &t.kind),
+        Some(TokKind::LParen)
+    ) {
+        push_range(&mut events, cursor, clause_start);
+        events.push(Event::Tok(clause_start));
+        cursor = clause_start + 1;
+        saw_lparen = true;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected '(' after 'for'".to_string(),
+            start: for_tok.start,
+            end: for_tok.end,
+        });
+        push_range(&mut events, cursor, clause_start);
+        cursor = clause_start;
+    }
+
+    let var_start = skip_ws_and_newlines(tokens, cursor);
+    if matches!(tokens.get(var_start).map(|t| &t.kind), Some(TokKind::Ident)) {
+        push_range(&mut events, cursor, var_start);
+        events.push(Event::Tok(var_start));
+        cursor = var_start + 1;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected loop variable after '(' in 'for'".to_string(),
+            start: for_tok.start,
+            end: for_tok.end,
+        });
+        push_range(&mut events, cursor, var_start);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = var_start;
+    }
+
+    let in_idx = skip_ws_and_newlines(tokens, cursor);
+    if matches!(tokens.get(in_idx).map(|t| &t.kind), Some(TokKind::InKw)) {
+        push_range(&mut events, cursor, in_idx);
+        events.push(Event::Tok(in_idx));
+        cursor = in_idx + 1;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected 'in' after for variable".to_string(),
+            start: for_tok.start,
+            end: for_tok.end,
+        });
+        push_range(&mut events, cursor, in_idx);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = in_idx;
+    }
+
+    let seq_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(seq_expr) = parse_expr(tokens, seq_start, 0, diagnostics) {
+        push_range(&mut events, cursor, seq_expr.start);
+        events.extend(seq_expr.events);
+        cursor = seq_expr.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected sequence expression after 'in'".to_string(),
+            start: for_tok.start,
+            end: for_tok.end,
+        });
+        push_range(&mut events, cursor, seq_start);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = seq_start;
+    }
+
+    if saw_lparen {
+        let clause_rparen = skip_ws_and_newlines(tokens, cursor);
+        if matches!(
+            tokens.get(clause_rparen).map(|t| &t.kind),
+            Some(TokKind::RParen)
+        ) {
+            push_range(&mut events, cursor, clause_rparen);
+            events.push(Event::Tok(clause_rparen));
+            cursor = clause_rparen + 1;
+        } else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected ')' after for clause".to_string(),
+                start: for_tok.start,
+                end: for_tok.end,
+            });
+            events.push(Event::Start(SyntaxKind::ERROR));
+            events.push(Event::Finish);
+        }
+    }
+
+    let body_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
+        push_range(&mut events, cursor, body_expr.start);
+        events.extend(body_expr.events);
+        cursor = body_expr.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected expression after for clause".to_string(),
+            start: for_tok.start,
+            end: for_tok.end,
+        });
+        let recovery = skip_ws_and_newlines(tokens, cursor);
+        push_range(&mut events, cursor, recovery);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = recovery;
+    }
+
+    events.push(Event::Finish);
+    Some(ExprParse {
+        start,
+        end: cursor,
+        events,
+    })
+}
+
+fn parse_function_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let function_tok = tokens.get(start)?;
+    let mut events = vec![Event::Start(SyntaxKind::FUNCTION_EXPR), Event::Tok(start)];
+    let mut cursor = start + 1;
+    let params_lparen = skip_ws_and_newlines(tokens, cursor);
+
+    if matches!(
+        tokens.get(params_lparen).map(|t| &t.kind),
+        Some(TokKind::LParen)
+    ) {
+        push_range(&mut events, cursor, params_lparen);
+        events.push(Event::Tok(params_lparen));
+        cursor = params_lparen + 1;
+
+        let mut i = cursor;
+        let mut depth = 1usize;
+        while i < tokens.len() {
+            match tokens[i].kind {
+                TokKind::LParen => depth += 1,
+                TokKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if i < tokens.len() && matches!(tokens[i].kind, TokKind::RParen) {
+            push_range(&mut events, cursor, i);
+            events.push(Event::Tok(i));
+            cursor = i + 1;
+        } else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected ')' after function parameters".to_string(),
+                start: function_tok.start,
+                end: function_tok.end,
+            });
+            let recovery = find_function_body_recovery(tokens, cursor);
+            push_range(&mut events, cursor, recovery);
+            events.push(Event::Start(SyntaxKind::ERROR));
+            events.push(Event::Finish);
+            cursor = recovery;
+        }
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected '(' after 'function'".to_string(),
+            start: function_tok.start,
+            end: function_tok.end,
+        });
+        push_range(&mut events, cursor, params_lparen);
+        cursor = params_lparen;
+    }
+
+    let body_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
+        push_range(&mut events, cursor, body_expr.start);
+        events.extend(body_expr.events);
+        cursor = body_expr.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected expression after function parameters".to_string(),
+            start: function_tok.start,
+            end: function_tok.end,
+        });
+        let recovery = skip_ws_and_newlines(tokens, cursor);
+        push_range(&mut events, cursor, recovery);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = recovery;
     }
 
     events.push(Event::Finish);
@@ -438,6 +764,10 @@ fn parse_prefix(
         | TokKind::RBrace
         | TokKind::IfKw
         | TokKind::ElseKw
+        | TokKind::ForKw
+        | TokKind::WhileKw
+        | TokKind::FunctionKw
+        | TokKind::InKw
         | TokKind::Unknown => None,
     }
 }
@@ -528,6 +858,15 @@ fn consume_to_line_end(tokens: &[Token], mut i: usize) -> usize {
     i
 }
 
+fn find_function_body_recovery(tokens: &[Token], start: usize) -> usize {
+    for (i, tok) in tokens.iter().enumerate().skip(start) {
+        if matches!(tok.kind, TokKind::Newline) {
+            return i;
+        }
+    }
+    tokens.len()
+}
+
 fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
     match kind {
         TokKind::Plus => Some((10, 11)),
@@ -539,6 +878,16 @@ fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
 
 fn skip_ws(tokens: &[Token], mut i: usize) -> usize {
     while matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Whitespace)) {
+        i += 1;
+    }
+    i
+}
+
+fn skip_ws_and_newlines(tokens: &[Token], mut i: usize) -> usize {
+    while matches!(
+        tokens.get(i).map(|t| &t.kind),
+        Some(TokKind::Whitespace | TokKind::Newline)
+    ) {
         i += 1;
     }
     i
@@ -561,6 +910,10 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::RParen => SyntaxKind::RPAREN,
         TokKind::IfKw => SyntaxKind::IF_KW,
         TokKind::ElseKw => SyntaxKind::ELSE_KW,
+        TokKind::ForKw => SyntaxKind::FOR_KW,
+        TokKind::WhileKw => SyntaxKind::WHILE_KW,
+        TokKind::FunctionKw => SyntaxKind::FUNCTION_KW,
+        TokKind::InKw => SyntaxKind::IN_KW,
         TokKind::LBrace => SyntaxKind::LBRACE,
         TokKind::RBrace => SyntaxKind::RBRACE,
         TokKind::AssignLeft => SyntaxKind::ASSIGN_LEFT,
@@ -828,6 +1181,10 @@ fn lex(input: &str) -> Vec<Token> {
             let kind = match text {
                 "if" => TokKind::IfKw,
                 "else" => TokKind::ElseKw,
+                "for" => TokKind::ForKw,
+                "while" => TokKind::WhileKw,
+                "function" => TokKind::FunctionKw,
+                "in" => TokKind::InKw,
                 _ => TokKind::Ident,
             };
             out.push(Token {

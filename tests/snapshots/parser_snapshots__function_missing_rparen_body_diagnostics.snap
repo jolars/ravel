@@ -1,0 +1,11 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected ')' after function parameters",
+        start: 0,
+        end: 8,
+    },
+]
