@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use ravel::cli::{Cli, Commands};
+use ravel::formatter::format;
 use ravel::parser::{parse, reconstruct};
 
 fn main() -> ExitCode {
@@ -15,6 +16,7 @@ fn main() -> ExitCode {
             quiet,
             verify,
         } => run_parse(file, quiet, verify),
+        Commands::Format { file, verify } => run_format(file, verify),
     }
 }
 
@@ -48,6 +50,41 @@ fn run_parse(file: Option<std::path::PathBuf>, quiet: bool, verify: bool) -> Exi
         }
     }
 
+    ExitCode::SUCCESS
+}
+
+fn run_format(file: Option<std::path::PathBuf>, verify: bool) -> ExitCode {
+    let input = match read_input(file.as_deref()) {
+        Ok(input) => input,
+        Err(err) => {
+            eprintln!("error: {err}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let formatted = match format(&input) {
+        Ok(formatted) => formatted,
+        Err(err) => {
+            eprintln!("error: {err}");
+            return ExitCode::from(1);
+        }
+    };
+
+    if verify {
+        let reformatted = match format(&formatted) {
+            Ok(reformatted) => reformatted,
+            Err(err) => {
+                eprintln!("error: formatted output failed verification: {err}");
+                return ExitCode::from(1);
+            }
+        };
+        if reformatted != formatted {
+            eprintln!("error: formatter verification failed (non-idempotent output)");
+            return ExitCode::from(1);
+        }
+    }
+
+    print!("{formatted}");
     ExitCode::SUCCESS
 }
 

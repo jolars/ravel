@@ -1,0 +1,40 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..38
+  IF_EXPR@0..37
+    IF_KW@0..2 "if"
+    WHITESPACE@2..3 " "
+    LPAREN@3..4 "("
+    IDENT@4..5 "x"
+    RPAREN@5..6 ")"
+    WHITESPACE@6..7 " "
+    BLOCK_EXPR@7..19
+      LBRACE@7..8 "{"
+      NEWLINE@8..9 "\n"
+      WHITESPACE@9..11 "  "
+      ASSIGNMENT_EXPR@11..17
+        IDENT@11..12 "y"
+        WHITESPACE@12..13 " "
+        ASSIGN_LEFT@13..15 "<-"
+        WHITESPACE@15..16 " "
+        INT@16..17 "1"
+      NEWLINE@17..18 "\n"
+      RBRACE@18..19 "}"
+    WHITESPACE@19..20 " "
+    ELSE_KW@20..24 "else"
+    WHITESPACE@24..25 " "
+    BLOCK_EXPR@25..37
+      LBRACE@25..26 "{"
+      NEWLINE@26..27 "\n"
+      WHITESPACE@27..29 "  "
+      ASSIGNMENT_EXPR@29..35
+        IDENT@29..30 "y"
+        WHITESPACE@30..31 " "
+        ASSIGN_LEFT@31..33 "<-"
+        WHITESPACE@33..34 " "
+        INT@34..35 "2"
+      NEWLINE@35..36 "\n"
+      RBRACE@36..37 "}"
+  NEWLINE@37..38 "\n"

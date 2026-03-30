@@ -50,5 +50,14 @@ fn fixture_names() -> &'static [&'static str] {
         "assignment_expr_rhs",
         "expr_missing_rhs",
         "expr_unexpected_prefix_op",
+        "if_simple",
+        "if_else_blocks",
+        "if_missing_condition_parens",
+        "if_missing_condition_expr",
+        "if_missing_rparen",
+        "if_missing_then_expr",
+        "if_missing_else_expr",
+        "if_dangling_else",
+        "unclosed_block",
     ]
 }

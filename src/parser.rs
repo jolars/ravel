@@ -22,6 +22,8 @@ enum TokKind {
     Float,
     String,
     Comment,
+    IfKw,
+    ElseKw,
     UserOp,
     LBrack2,
     RBrack2,
@@ -30,6 +32,8 @@ enum TokKind {
     Caret,
     LParen,
     RParen,
+    LBrace,
+    RBrace,
     AssignLeft,
     Whitespace,
     Newline,
@@ -99,6 +103,14 @@ fn parse_expr(
     min_bp: u8,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let start_non_ws = skip_ws(tokens, start);
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::IfKw)
+    ) {
+        return parse_if_expr(tokens, start_non_ws, diagnostics);
+    }
+
     let mut lhs = parse_prefix(tokens, start, diagnostics)?;
 
     loop {
@@ -205,6 +217,118 @@ fn parse_expr(
     Some(lhs)
 }
 
+fn parse_if_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let if_tok = tokens.get(start)?;
+    let mut events = vec![Event::Start(SyntaxKind::IF_EXPR), Event::Tok(start)];
+    let mut cursor = start + 1;
+    let mut cond_start = skip_ws(tokens, cursor);
+    let mut saw_lparen = false;
+
+    if matches!(
+        tokens.get(cond_start).map(|t| &t.kind),
+        Some(TokKind::LParen)
+    ) {
+        push_range(&mut events, cursor, cond_start);
+        events.push(Event::Tok(cond_start));
+        cursor = cond_start + 1;
+        cond_start = cursor;
+        saw_lparen = true;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected '(' after 'if'".to_string(),
+            start: if_tok.start,
+            end: if_tok.end,
+        });
+        push_range(&mut events, cursor, cond_start);
+        cursor = cond_start;
+    }
+
+    if let Some(cond) = parse_expr(tokens, cond_start, 0, diagnostics) {
+        push_range(&mut events, cursor, cond.start);
+        events.extend(cond.events);
+        cursor = cond.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected condition expression after 'if'".to_string(),
+            start: if_tok.start,
+            end: if_tok.end,
+        });
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = cond_start;
+    }
+
+    if saw_lparen {
+        let cond_rparen = skip_ws(tokens, cursor);
+        if matches!(
+            tokens.get(cond_rparen).map(|t| &t.kind),
+            Some(TokKind::RParen)
+        ) {
+            push_range(&mut events, cursor, cond_rparen);
+            events.push(Event::Tok(cond_rparen));
+            cursor = cond_rparen + 1;
+        } else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected ')' after if condition".to_string(),
+                start: if_tok.start,
+                end: if_tok.end,
+            });
+        }
+    }
+
+    if let Some(then_expr) = parse_expr(tokens, cursor, 0, diagnostics) {
+        push_range(&mut events, cursor, then_expr.start);
+        events.extend(then_expr.events);
+        cursor = then_expr.end;
+    } else {
+        diagnostics.push(ParseDiagnostic {
+            message: "expected expression after if condition".to_string(),
+            start: if_tok.start,
+            end: if_tok.end,
+        });
+        let recovery = skip_ws(tokens, cursor);
+        push_range(&mut events, cursor, recovery);
+        events.push(Event::Start(SyntaxKind::ERROR));
+        events.push(Event::Finish);
+        cursor = recovery;
+    }
+
+    let else_idx = skip_ws(tokens, cursor);
+    if matches!(tokens.get(else_idx).map(|t| &t.kind), Some(TokKind::ElseKw)) {
+        push_range(&mut events, cursor, else_idx);
+        events.push(Event::Tok(else_idx));
+        cursor = else_idx + 1;
+
+        if let Some(parsed_else) = parse_expr(tokens, cursor, 0, diagnostics) {
+            push_range(&mut events, cursor, parsed_else.start);
+            events.extend(parsed_else.events);
+            cursor = parsed_else.end;
+        } else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected expression after 'else'".to_string(),
+                start: tokens[else_idx].start,
+                end: tokens[else_idx].end,
+            });
+            let recovery = skip_ws(tokens, cursor);
+            push_range(&mut events, cursor, recovery);
+            events.push(Event::Start(SyntaxKind::ERROR));
+            events.push(Event::Finish);
+            cursor = recovery;
+        }
+    }
+
+    events.push(Event::Finish);
+    Some(ExprParse {
+        start,
+        end: cursor,
+        events,
+    })
+}
+
 fn parse_prefix(
     tokens: &[Token],
     start: usize,
@@ -234,7 +358,18 @@ fn parse_prefix(
                     start: tok.start,
                     end: tok.end,
                 });
-                return None;
+                let end_idx = consume_to_line_end(tokens, inner_start);
+                let mut events = Vec::new();
+                events.push(Event::Start(SyntaxKind::ERROR));
+                for idx in i..end_idx {
+                    events.push(Event::Tok(idx));
+                }
+                events.push(Event::Finish);
+                return Some(ExprParse {
+                    start: i,
+                    end: end_idx,
+                    events,
+                });
             };
             let close_idx = skip_ws(tokens, inner.end);
             if !matches!(
@@ -246,7 +381,19 @@ fn parse_prefix(
                     start: tok.start,
                     end: tok.end,
                 });
-                return Some(inner);
+                let mut events = Vec::new();
+                events.push(Event::Start(SyntaxKind::PAREN_EXPR));
+                events.push(Event::Tok(i));
+                events.extend(inner.events);
+                for idx in inner.end..close_idx {
+                    events.push(Event::Tok(idx));
+                }
+                events.push(Event::Finish);
+                return Some(ExprParse {
+                    start: i,
+                    end: close_idx,
+                    events,
+                });
             }
 
             let mut events = Vec::new();
@@ -265,6 +412,7 @@ fn parse_prefix(
                 events,
             })
         }
+        TokKind::LBrace => parse_block_expr(tokens, i, diagnostics),
         TokKind::Plus | TokKind::Star | TokKind::Caret | TokKind::AssignLeft => {
             diagnostics.push(ParseDiagnostic {
                 message: "unexpected operator at expression start".to_string(),
@@ -284,7 +432,72 @@ fn parse_prefix(
                 events,
             })
         }
-        TokKind::Whitespace | TokKind::Newline | TokKind::RParen | TokKind::Unknown => None,
+        TokKind::Whitespace
+        | TokKind::Newline
+        | TokKind::RParen
+        | TokKind::RBrace
+        | TokKind::IfKw
+        | TokKind::ElseKw
+        | TokKind::Unknown => None,
+    }
+}
+
+fn parse_block_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let mut i = start + 1;
+    let mut events = vec![Event::Start(SyntaxKind::BLOCK_EXPR), Event::Tok(start)];
+
+    loop {
+        let next = skip_ws(tokens, i);
+        let Some(tok) = tokens.get(next) else {
+            diagnostics.push(ParseDiagnostic {
+                message: "expected '}' to close block".to_string(),
+                start: tokens[start].start,
+                end: tokens[start].end,
+            });
+            for idx in i..tokens.len() {
+                events.push(Event::Tok(idx));
+            }
+            events.push(Event::Finish);
+            return Some(ExprParse {
+                start,
+                end: tokens.len(),
+                events,
+            });
+        };
+
+        if tok.kind == TokKind::RBrace {
+            for idx in i..next {
+                events.push(Event::Tok(idx));
+            }
+            events.push(Event::Tok(next));
+            events.push(Event::Finish);
+            return Some(ExprParse {
+                start,
+                end: next + 1,
+                events,
+            });
+        }
+
+        if let Some(expr) = parse_expr(tokens, i, 0, diagnostics) {
+            for idx in i..expr.start {
+                events.push(Event::Tok(idx));
+            }
+            events.extend(expr.events);
+            i = expr.end;
+        } else {
+            events.push(Event::Tok(i));
+            i += 1;
+        }
+    }
+}
+
+fn push_range(events: &mut Vec<Event>, start: usize, end: usize) {
+    for idx in start..end {
+        events.push(Event::Tok(idx));
     }
 }
 
@@ -346,6 +559,10 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::Caret => SyntaxKind::CARET,
         TokKind::LParen => SyntaxKind::LPAREN,
         TokKind::RParen => SyntaxKind::RPAREN,
+        TokKind::IfKw => SyntaxKind::IF_KW,
+        TokKind::ElseKw => SyntaxKind::ELSE_KW,
+        TokKind::LBrace => SyntaxKind::LBRACE,
+        TokKind::RBrace => SyntaxKind::RBRACE,
         TokKind::AssignLeft => SyntaxKind::ASSIGN_LEFT,
         TokKind::Whitespace => SyntaxKind::WHITESPACE,
         TokKind::Newline => SyntaxKind::NEWLINE,
@@ -494,6 +711,28 @@ fn lex(input: &str) -> Vec<Token> {
             continue;
         }
 
+        if c == '{' {
+            out.push(Token {
+                kind: TokKind::LBrace,
+                text: "{".to_string(),
+                start: i,
+                end: i + 1,
+            });
+            i += 1;
+            continue;
+        }
+
+        if c == '}' {
+            out.push(Token {
+                kind: TokKind::RBrace,
+                text: "}".to_string(),
+                start: i,
+                end: i + 1,
+            });
+            i += 1;
+            continue;
+        }
+
         if c == '%' {
             let start = i;
             i += 1;
@@ -585,9 +824,15 @@ fn lex(input: &str) -> Vec<Token> {
                 }
                 i += 1;
             }
+            let text = &input[start..i];
+            let kind = match text {
+                "if" => TokKind::IfKw,
+                "else" => TokKind::ElseKw,
+                _ => TokKind::Ident,
+            };
             out.push(Token {
-                kind: TokKind::Ident,
-                text: input[start..i].to_string(),
+                kind,
+                text: text.to_string(),
                 start,
                 end: i,
             });

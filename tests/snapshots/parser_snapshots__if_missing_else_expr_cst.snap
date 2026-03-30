@@ -1,0 +1,17 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..14
+  IF_EXPR@0..13
+    IF_KW@0..2 "if"
+    WHITESPACE@2..3 " "
+    LPAREN@3..4 "("
+    IDENT@4..5 "x"
+    RPAREN@5..6 ")"
+    WHITESPACE@6..7 " "
+    IDENT@7..8 "y"
+    WHITESPACE@8..9 " "
+    ELSE_KW@9..13 "else"
+    ERROR@13..13
+  NEWLINE@13..14 "\n"

@@ -36,4 +36,13 @@ pub enum Commands {
         #[arg(long)]
         verify: bool,
     },
+    /// Formatter v1 for currently supported parseable syntax
+    Format {
+        /// Input file (stdin if not provided)
+        file: Option<PathBuf>,
+
+        /// Verify formatting idempotence for supported inputs
+        #[arg(long)]
+        verify: bool,
+    },
 }
