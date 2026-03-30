@@ -44,6 +44,25 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
         let c = bytes[i] as char;
 
         match c {
+            '\r' => {
+                if i + 1 < bytes.len() && (bytes[i + 1] as char) == '\n' {
+                    out.push(Token {
+                        kind: TokKind::Newline,
+                        text: "\r\n".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                } else {
+                    out.push(Token {
+                        kind: TokKind::Newline,
+                        text: "\r".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                }
+            }
             '\n' => {
                 out.push(Token {
                     kind: TokKind::Newline,
@@ -179,7 +198,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     let start = i;
                     while i < bytes.len() {
                         let ch = bytes[i] as char;
-                        if ch == '\n' || !ch.is_ascii_whitespace() {
+                        if ch == '\n' || ch == '\r' || !ch.is_ascii_whitespace() {
                             break;
                         }
                         i += 1;
@@ -299,4 +318,29 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TokKind, lex};
+
+    #[test]
+    fn lexes_crlf_as_single_newline_token() {
+        let tokens = lex("x\r\ny");
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].kind, TokKind::Ident);
+        assert_eq!(tokens[1].kind, TokKind::Newline);
+        assert_eq!(tokens[1].text, "\r\n");
+        assert_eq!(tokens[2].kind, TokKind::Ident);
+    }
+
+    #[test]
+    fn lexes_lone_cr_as_newline_token() {
+        let tokens = lex("x\ry");
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].kind, TokKind::Ident);
+        assert_eq!(tokens[1].kind, TokKind::Newline);
+        assert_eq!(tokens[1].text, "\r");
+        assert_eq!(tokens[2].kind, TokKind::Ident);
+    }
 }
