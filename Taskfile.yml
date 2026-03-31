@@ -40,3 +40,13 @@ tasks:
     desc: Preview documentation site locally
     cmds:
       - cd docs && quarto preview --no-browser
+
+  audit:
+    desc: Run security audit
+    cmds:
+      - cargo audit
+
+  deny:
+    desc: Run cargo deny to check for vulnerabilities and issues
+    cmds:
+      - cargo deny check
