@@ -210,7 +210,20 @@ fn format_binary_expr(node: &SyntaxNode, indent: usize) -> Result<String, Format
                 NodeOrToken::Token(tok)
                     if matches!(
                         tok.kind(),
-                        SyntaxKind::PLUS | SyntaxKind::STAR | SyntaxKind::CARET | SyntaxKind::PIPE
+                        SyntaxKind::PLUS
+                            | SyntaxKind::STAR
+                            | SyntaxKind::CARET
+                            | SyntaxKind::PIPE
+                            | SyntaxKind::OR
+                            | SyntaxKind::OR2
+                            | SyntaxKind::AND
+                            | SyntaxKind::AND2
+                            | SyntaxKind::EQUAL2
+                            | SyntaxKind::NOT_EQUAL
+                            | SyntaxKind::LESS_THAN
+                            | SyntaxKind::LESS_THAN_OR_EQUAL
+                            | SyntaxKind::GREATER_THAN
+                            | SyntaxKind::GREATER_THAN_OR_EQUAL
                     )
             )
         })

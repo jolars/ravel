@@ -204,6 +204,16 @@ fn parse_prefix(
         | TokKind::AssignRight
         | TokKind::SuperAssignRight
         | TokKind::AssignEq
+        | TokKind::Or
+        | TokKind::Or2
+        | TokKind::And
+        | TokKind::And2
+        | TokKind::Equal2
+        | TokKind::NotEqual
+        | TokKind::LessThan
+        | TokKind::LessThanOrEqual
+        | TokKind::GreaterThan
+        | TokKind::GreaterThanOrEqual
         | TokKind::Pipe => {
             push_token_diagnostic(diagnostics, "unexpected operator at expression start", tok);
             Some(error_expr_to_line_end(tokens, i, i + 1))
@@ -273,8 +283,17 @@ fn parse_block_expr(
 
 fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
     // Binding powers are aligned to AIR's operator precedence tiers:
-    // Additive (9), Multiplicative (10), Special (11), Exponential (14).
+    // LogicalOr (5), LogicalAnd (6), Relational (8), Additive (9),
+    // Multiplicative (10), Special (11), Exponential (14).
     match kind {
+        TokKind::Or | TokKind::Or2 => Some((50, 51)),
+        TokKind::And | TokKind::And2 => Some((60, 61)),
+        TokKind::Equal2
+        | TokKind::NotEqual
+        | TokKind::LessThan
+        | TokKind::LessThanOrEqual
+        | TokKind::GreaterThan
+        | TokKind::GreaterThanOrEqual => Some((80, 81)),
         TokKind::Plus => Some((90, 91)),
         TokKind::Star => Some((100, 101)),
         TokKind::Pipe => Some((110, 111)),

@@ -18,6 +18,16 @@ pub(crate) enum TokKind {
     Star,
     Caret,
     Pipe,
+    Or,
+    Or2,
+    And,
+    And2,
+    Equal2,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
     LParen,
     RParen,
     LBrace,
@@ -217,6 +227,50 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     continue;
                 }
 
+                if i + 1 < bytes.len() && &input[i..i + 2] == "||" {
+                    out.push(Token {
+                        kind: TokKind::Or2,
+                        text: "||".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == "&&" {
+                    out.push(Token {
+                        kind: TokKind::And2,
+                        text: "&&".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == "==" {
+                    out.push(Token {
+                        kind: TokKind::Equal2,
+                        text: "==".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == "!=" {
+                    out.push(Token {
+                        kind: TokKind::NotEqual,
+                        text: "!=".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
                 if i + 1 < bytes.len() && &input[i..i + 2] == "|>" {
                     out.push(Token {
                         kind: TokKind::Pipe,
@@ -272,10 +326,76 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     continue;
                 }
 
+                if i + 1 < bytes.len() && &input[i..i + 2] == "<=" {
+                    out.push(Token {
+                        kind: TokKind::LessThanOrEqual,
+                        text: "<=".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == ">=" {
+                    out.push(Token {
+                        kind: TokKind::GreaterThanOrEqual,
+                        text: ">=".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
                 if c == '=' {
                     out.push(Token {
                         kind: TokKind::AssignEq,
                         text: "=".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == '|' {
+                    out.push(Token {
+                        kind: TokKind::Or,
+                        text: "|".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == '&' {
+                    out.push(Token {
+                        kind: TokKind::And,
+                        text: "&".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == '<' {
+                    out.push(Token {
+                        kind: TokKind::LessThan,
+                        text: "<".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == '>' {
+                    out.push(Token {
+                        kind: TokKind::GreaterThan,
+                        text: ">".to_string(),
                         start: i,
                         end: i + 1,
                     });

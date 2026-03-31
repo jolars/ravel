@@ -56,6 +56,7 @@ fn fixture_names() -> &'static [&'static str] {
         "assignment_chain_right_assoc",
         "pipe_simple",
         "pipe_precedence",
+        "expr_logical_relational",
         "expr_missing_rhs",
         "expr_unexpected_prefix_op",
         "if_simple",
