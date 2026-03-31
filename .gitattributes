@@ -1,0 +1,12 @@
+# Let Git auto-detect text files
+* text=auto
+
+# R fixtures should use LF by default for consistent snapshots
+tests/fixtures/**/*.R eol=lf
+
+# Snapshot files should always use LF
+tests/**/snapshots/**/* eol=lf
+
+# Preserve line ending fixtures as-is (CRLF/LF)
+tests/fixtures/parser/crlf_*/* -text
+tests/fixtures/parser/lf_*/* -text
