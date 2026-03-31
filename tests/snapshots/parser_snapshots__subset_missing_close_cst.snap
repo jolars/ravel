@@ -1,0 +1,34 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..17
+  SUBSET_EXPR@0..17
+    IDENT@0..1 "x"
+    LBRACK@1..2 "["
+    ARG_LIST@2..17
+      ARG@2..3
+        IDENT@2..3 "i"
+      NEWLINE@3..4 "\n"
+      ARG@4..17
+        SUBSET2_EXPR@4..17
+          IDENT@4..5 "x"
+          LBRACK2@5..7 "[["
+          ARG_LIST@7..17
+            ARG@7..8
+              IDENT@7..8 "i"
+            ARG@8..9
+              RBRACK@8..9 "]"
+            NEWLINE@9..10 "\n"
+            ARG@10..17
+              SUBSET_EXPR@10..17
+                IDENT@10..11 "x"
+                LBRACK@11..12 "["
+                ARG_LIST@12..17
+                  ARG@12..13
+                    IDENT@12..13 "i"
+                  COMMA@13..14 ","
+                  WHITESPACE@14..15 " "
+                  ARG@15..16
+                    IDENT@15..16 "j"
+                  NEWLINE@16..17 "\n"

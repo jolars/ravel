@@ -1,0 +1,48 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..35
+  ASSIGNMENT_EXPR@0..9
+    SUBSET_EXPR@0..4
+      IDENT@0..1 "x"
+      LBRACK@1..2 "["
+      ARG_LIST@2..3
+        ARG@2..3
+          IDENT@2..3 "i"
+      RBRACK@3..4 "]"
+    WHITESPACE@4..5 " "
+    ASSIGN_LEFT@5..7 "<-"
+    WHITESPACE@7..8 " "
+    INT@8..9 "1"
+  NEWLINE@9..10 "\n"
+  ASSIGNMENT_EXPR@10..21
+    SUBSET2_EXPR@10..16
+      IDENT@10..11 "x"
+      LBRACK2@11..13 "[["
+      ARG_LIST@13..14
+        ARG@13..14
+          IDENT@13..14 "i"
+      RBRACK2@14..16 "]]"
+    WHITESPACE@16..17 " "
+    ASSIGN_LEFT@17..19 "<-"
+    WHITESPACE@19..20 " "
+    INT@20..21 "2"
+  NEWLINE@21..22 "\n"
+  ASSIGNMENT_EXPR@22..34
+    SUBSET_EXPR@22..29
+      IDENT@22..23 "x"
+      LBRACK@23..24 "["
+      ARG_LIST@24..28
+        ARG@24..25
+          IDENT@24..25 "i"
+        COMMA@25..26 ","
+        WHITESPACE@26..27 " "
+        ARG@27..28
+          IDENT@27..28 "j"
+      RBRACK@28..29 "]"
+    WHITESPACE@29..30 " "
+    ASSIGN_LEFT@30..32 "<-"
+    WHITESPACE@32..33 " "
+    IDENT@33..34 "y"
+  NEWLINE@34..35 "\n"

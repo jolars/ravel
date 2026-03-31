@@ -93,5 +93,7 @@ fn fixture_names() -> &'static [&'static str] {
         "stmt_semicolon_separator",
         "subset_simple",
         "subset2_simple",
+        "subset_assignment",
+        "subset_missing_close",
     ]
 }

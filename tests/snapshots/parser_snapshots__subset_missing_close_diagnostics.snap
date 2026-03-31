@@ -1,0 +1,21 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 11,
+        end: 12,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 5,
+        end: 7,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 1,
+        end: 2,
+    },
+]
