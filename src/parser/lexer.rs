@@ -13,6 +13,8 @@ pub(crate) enum TokKind {
     InKw,
     Tilde,
     UserOp,
+    LBrack,
+    RBrack,
     LBrack2,
     RBrack2,
     Plus,
@@ -544,6 +546,28 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                         end: i + 2,
                     });
                     i += 2;
+                    continue;
+                }
+
+                if c == '[' {
+                    out.push(Token {
+                        kind: TokKind::LBrack,
+                        text: "[".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == ']' {
+                    out.push(Token {
+                        kind: TokKind::RBrack,
+                        text: "]".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
                     continue;
                 }
 

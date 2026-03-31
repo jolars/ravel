@@ -89,16 +89,7 @@ fn parse_expr_with_mode(
     let mut lhs = parse_prefix(tokens, start, diagnostics, allow_newline_prefix)?;
 
     loop {
-        // Check for function call: expr(...)
-        // No newline is allowed between the callee and `(` — `f\n(x)` is two statements in R.
-        let after_lhs = skip_ws(tokens, lhs.end);
-        if matches!(
-            tokens.get(after_lhs).map(|t| &t.kind),
-            Some(TokKind::LParen)
-        ) {
-            lhs = parse_call_expr(tokens, lhs, after_lhs, diagnostics);
-            continue;
-        }
+        lhs = parse_postfix_chain(tokens, lhs, diagnostics);
 
         let Some((op_idx, op)) = next_operator(tokens, lhs.end) else {
             break;
@@ -119,23 +110,7 @@ fn parse_expr_with_mode(
                 return Some(error_expr_to_line_end(tokens, lhs.start, rhs_start));
             };
 
-            let mut events = Vec::new();
-            events.push(Event::Start(SyntaxKind::ASSIGNMENT_EXPR));
-            for idx in lhs.start..op_idx {
-                events.push(Event::Tok(idx));
-            }
-            events.push(Event::Tok(op_idx));
-            for idx in (op_idx + 1)..rhs.start {
-                events.push(Event::Tok(idx));
-            }
-            events.extend(rhs.events);
-            events.push(Event::Finish);
-
-            lhs = ExprParse {
-                start: lhs.start,
-                end: rhs.end,
-                events,
-            };
+            lhs = build_assignment_expr(lhs, op_idx, rhs);
             continue;
         }
 
@@ -159,24 +134,7 @@ fn parse_expr_with_mode(
             return Some(error_expr_to_line_end(tokens, lhs.start, rhs_start));
         };
 
-        let mut events = Vec::new();
-        events.push(Event::Start(SyntaxKind::BINARY_EXPR));
-        events.extend(lhs.events);
-        for idx in lhs.end..op_idx {
-            events.push(Event::Tok(idx));
-        }
-        events.push(Event::Tok(op_idx));
-        for idx in (op_idx + 1)..rhs.start {
-            events.push(Event::Tok(idx));
-        }
-        events.extend(rhs.events);
-        events.push(Event::Finish);
-
-        lhs = ExprParse {
-            start: lhs.start,
-            end: rhs.end,
-            events,
-        };
+        lhs = build_binary_expr(lhs, op_idx, rhs);
     }
 
     Some(lhs)
@@ -222,9 +180,7 @@ fn parse_prefix(
         | TokKind::Float
         | TokKind::String
         | TokKind::Comment
-        | TokKind::UserOp
-        | TokKind::LBrack2
-        | TokKind::RBrack2 => Some(ExprParse {
+        | TokKind::UserOp => Some(ExprParse {
             start: i,
             end: i + 1,
             events: vec![Event::Tok(i)],
@@ -307,6 +263,8 @@ fn parse_prefix(
         TokKind::Whitespace
         | TokKind::Newline
         | TokKind::RParen
+        | TokKind::RBrack
+        | TokKind::RBrack2
         | TokKind::RBrace
         | TokKind::IfKw
         | TokKind::ElseKw
@@ -314,6 +272,8 @@ fn parse_prefix(
         | TokKind::WhileKw
         | TokKind::FunctionKw
         | TokKind::InKw
+        | TokKind::LBrack
+        | TokKind::LBrack2
         | TokKind::Unknown => None,
     }
 }
@@ -374,6 +334,74 @@ fn parse_block_expr(
             i += 1;
         }
     }
+}
+
+fn parse_postfix_chain(
+    tokens: &[Token],
+    mut lhs: ExprParse,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> ExprParse {
+    loop {
+        // No newline is allowed between the callee and `(` — `f\n(x)` is two statements in R.
+        let after_lhs = skip_ws(tokens, lhs.end);
+        if matches!(
+            tokens.get(after_lhs).map(|t| &t.kind),
+            Some(TokKind::LParen)
+        ) {
+            lhs = parse_call_expr(tokens, lhs, after_lhs, diagnostics);
+            continue;
+        }
+        if matches!(
+            tokens.get(after_lhs).map(|t| &t.kind),
+            Some(TokKind::LBrack)
+        ) {
+            lhs = parse_subset_expr(tokens, lhs, after_lhs, diagnostics);
+            continue;
+        }
+        if matches!(
+            tokens.get(after_lhs).map(|t| &t.kind),
+            Some(TokKind::LBrack2)
+        ) {
+            lhs = parse_subset2_expr(tokens, lhs, after_lhs, diagnostics);
+            continue;
+        }
+        break;
+    }
+    lhs
+}
+
+fn build_binary_like_expr(
+    kind: SyntaxKind,
+    lhs: ExprParse,
+    op_idx: usize,
+    rhs: ExprParse,
+) -> ExprParse {
+    let mut events = Vec::new();
+    events.push(Event::Start(kind));
+    events.extend(lhs.events);
+    for idx in lhs.end..op_idx {
+        events.push(Event::Tok(idx));
+    }
+    events.push(Event::Tok(op_idx));
+    for idx in (op_idx + 1)..rhs.start {
+        events.push(Event::Tok(idx));
+    }
+    events.extend(rhs.events);
+    events.push(Event::Finish);
+
+    ExprParse {
+        start: lhs.start,
+        end: rhs.end,
+        events,
+    }
+}
+
+fn build_binary_expr(lhs: ExprParse, op_idx: usize, rhs: ExprParse) -> ExprParse {
+    build_binary_like_expr(SyntaxKind::BINARY_EXPR, lhs, op_idx, rhs)
+}
+
+fn build_assignment_expr(lhs: ExprParse, op_idx: usize, rhs: ExprParse) -> ExprParse {
+    build_binary_like_expr(SyntaxKind::ASSIGNMENT_EXPR, lhs, op_idx, rhs)
 }
 
 /// Returns true if tokens starting at `i` match the pattern `ident =` (named argument),
@@ -494,6 +522,127 @@ fn parse_call_expr(
 
     ExprParse {
         start: callee.start,
+        end: i,
+        events,
+    }
+}
+
+fn parse_subset_expr(
+    tokens: &[Token],
+    target: ExprParse,
+    lbrack_idx: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> ExprParse {
+    parse_bracket_expr(
+        tokens,
+        target,
+        lbrack_idx,
+        TokKind::RBrack,
+        SyntaxKind::SUBSET_EXPR,
+        diagnostics,
+    )
+}
+
+fn parse_subset2_expr(
+    tokens: &[Token],
+    target: ExprParse,
+    lbrack2_idx: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> ExprParse {
+    parse_bracket_expr(
+        tokens,
+        target,
+        lbrack2_idx,
+        TokKind::RBrack2,
+        SyntaxKind::SUBSET2_EXPR,
+        diagnostics,
+    )
+}
+
+fn parse_bracket_expr(
+    tokens: &[Token],
+    target: ExprParse,
+    open_idx: usize,
+    close_kind: TokKind,
+    node_kind: SyntaxKind,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> ExprParse {
+    let mut events = vec![Event::Start(node_kind)];
+    events.extend(target.events);
+    for idx in target.end..open_idx {
+        events.push(Event::Tok(idx));
+    }
+    events.push(Event::Tok(open_idx));
+
+    events.push(Event::Start(SyntaxKind::ARG_LIST));
+    let mut i = open_idx + 1;
+
+    loop {
+        let next_i = skip_ws_and_newlines(tokens, i);
+        for idx in i..next_i {
+            events.push(Event::Tok(idx));
+        }
+        i = next_i;
+
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(k) if *k == close_kind)
+            || tokens.get(i).is_none()
+        {
+            break;
+        }
+
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
+            events.push(Event::Start(SyntaxKind::ARG));
+            events.push(Event::Finish);
+            events.push(Event::Tok(i));
+            i += 1;
+            continue;
+        }
+
+        events.push(Event::Start(SyntaxKind::ARG));
+        if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+            for idx in i..arg.start {
+                events.push(Event::Tok(idx));
+            }
+            events.extend(arg.events);
+            i = arg.end;
+        } else {
+            events.push(Event::Tok(i));
+            i += 1;
+        }
+        events.push(Event::Finish);
+
+        let next_i = skip_ws_and_newlines(tokens, i);
+        for idx in i..next_i {
+            events.push(Event::Tok(idx));
+        }
+        i = next_i;
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
+            events.push(Event::Tok(i));
+            i += 1;
+        }
+    }
+
+    events.push(Event::Finish); // ARG_LIST
+    let next_i = skip_ws_and_newlines(tokens, i);
+    for idx in i..next_i {
+        events.push(Event::Tok(idx));
+    }
+    i = next_i;
+
+    if matches!(tokens.get(i).map(|t| &t.kind), Some(k) if *k == close_kind) {
+        events.push(Event::Tok(i));
+        i += 1;
+    } else if let Some(tok) = tokens.get(open_idx) {
+        push_token_diagnostic(
+            diagnostics,
+            "expected closing bracket in subset expression",
+            tok,
+        );
+    }
+
+    events.push(Event::Finish);
+    ExprParse {
+        start: target.start,
         end: i,
         events,
     }

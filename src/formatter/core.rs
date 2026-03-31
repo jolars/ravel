@@ -68,6 +68,8 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
         if matches!(
             kind,
             SyntaxKind::USER_OP
+                | SyntaxKind::LBRACK
+                | SyntaxKind::RBRACK
                 | SyntaxKind::LBRACK2
                 | SyntaxKind::RBRACK2
                 | SyntaxKind::COLON2

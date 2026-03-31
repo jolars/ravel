@@ -91,5 +91,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_named_args",
         "call_mixed_args",
         "stmt_semicolon_separator",
+        "subset_simple",
+        "subset2_simple",
     ]
 }
