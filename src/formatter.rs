@@ -1,5 +1,5 @@
 pub mod check;
-pub mod engine;
+pub mod core;
 
 pub use check::{CheckError, CheckResult, check_paths};
-pub use engine::{FormatError, format};
+pub use core::{FormatError, format};

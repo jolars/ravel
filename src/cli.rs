@@ -36,7 +36,7 @@ pub enum Commands {
         #[arg(long)]
         verify: bool,
     },
-    /// Formatter for currently supported parseable syntax
+    /// Format .R files
     Format {
         /// Input file or path (stdin if omitted and --check is not set)
         #[arg(value_name = "PATH")]
@@ -50,7 +50,7 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
     },
-    /// Lint .R files (rules not implemented yet)
+    /// Lint .R files
     Lint {
         /// Input file or path; required with --check
         #[arg(value_name = "PATH")]
