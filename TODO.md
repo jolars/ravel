@@ -59,12 +59,13 @@ order.
 
 ## Phase 2.5: Parsing completeness and hardening
 
-- [ ] Expand operator/assignment coverage (`=`, `<<-`, `->`, `->>`, `:=`) with
+- [ ] Expand operator/assignment coverage (`=`, `<<-`, `->`, `->>`) with
       explicit precedence and associativity decisions.
 - [ ] Formalize newline-sensitive statement boundary behavior for edge cases
       (continuations, dangling constructs, nested forms).
 - [ ] Add targeted parsing fixtures for ambiguous contexts (argument defaults,
-      named arguments, chained assignments, mixed control-flow/assignment forms).
+      named arguments, chained assignments, mixed control-flow/assignment
+      forms).
 - [ ] Consolidate parser diagnostics for consistency (message style, span
       precision, recovery node shape guarantees).
 
@@ -77,8 +78,10 @@ order.
 
 - [x] Add snapshot-style CST tests for initial fixture corpus (expand to broader
       representative/malformed set next).
+
 - [x] Expand fixture corpus for lexer coverage (comments, strings, floats,
       `%...%`, `[[`/`]]`) with snapshots and losslessness checks.
+
 - [x] Snapshot parser diagnostics per fixture, including malformed input
       (`assignment_missing_rhs`).
 
@@ -86,8 +89,9 @@ order.
 
 - [ ] Introduce typed AstWrappers using rowan's built-in AST support (`AstNode`,
       `ast::support`).
-- [ ] Add wrapper coverage for current core nodes (`AssignmentExpr`, `BinaryExpr`,
-      `IfExpr`, `ForExpr`, `WhileExpr`, `FunctionExpr`, `BlockExpr`).
+- [ ] Add wrapper coverage for current core nodes (`AssignmentExpr`,
+      `BinaryExpr`, `IfExpr`, `ForExpr`, `WhileExpr`, `FunctionExpr`,
+      `BlockExpr`).
 - [ ] Keep wrappers zero-cost over lossless CST (no semantic evaluation, no data
       duplication).
 - [ ] Add tests validating wrapper casting/traversal against snapshot fixtures.
@@ -117,8 +121,8 @@ order.
 
 - [ ] Expand formatter coverage for additional parsed constructs and edge cases
       while preserving comments/trivia.
-- [ ] Add configurable formatting knobs aligned with `ravel.toml` defaults
-      (line width, indentation, selected style toggles).
+- [ ] Add configurable formatting knobs aligned with `ravel.toml` defaults (line
+      width, indentation, selected style toggles).
 - [ ] Improve stability/perf with larger fixture corpus and deterministic output
       across multi-file runs.
 - [ ] Add migration/regression tests to ensure v2 changes remain predictable and
@@ -130,7 +134,8 @@ order.
       explicit, and forward-compatible).
 - [ ] Support configuration discovery hierarchy (cwd -> parent dirs) and
       precedence with CLI flags.
-- [ ] Add sections for formatter and linter settings (start minimal, expandable).
+- [ ] Add sections for formatter and linter settings (start minimal,
+      expandable).
 - [ ] Validate and report configuration errors with clear file/field context.
 - [ ] Add tests for config parsing, discovery, precedence, and invalid files.
 
