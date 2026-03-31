@@ -69,6 +69,65 @@ order.
 - [ ] Consolidate parser diagnostics for consistency (message style, span
       precision, recovery node shape guarantees).
 
+## Phase 2.6: AIR parser snapshot hardening backlog
+
+Use AIR snapshot cases as incremental parser-hardening input. Execute in order:
+easy -> medium -> hard.
+
+- [ ] Phase A (easy): port easy `ok` + `error` cases
+- [ ] Phase B (medium): port medium `ok` cases
+- [ ] Phase C (hard): implement grammar needed for hard `ok`/`error`/`undefined`
+      cases
+
+### AIR `ok` cases (29)
+
+- [ ] `ok/binary_expressions.R` (easy)
+- [ ] `ok/braced_expressions.R` (easy)
+- [ ] `ok/calls.R` (easy)
+- [ ] `ok/comments.R` (easy)
+- [ ] `ok/parenthesized_expression.R` (easy)
+- [ ] `ok/semicolons/semicolon-end-of-file-01.R` (easy)
+- [ ] `ok/semicolons/semicolon-end-of-file-02.R` (easy)
+- [ ] `ok/semicolons/semicolon-end-of-file-03.R` (easy)
+- [ ] `ok/semicolons/semicolon-start-of-file-01.R` (easy)
+- [ ] `ok/semicolons/semicolon-start-of-file-02.R` (easy)
+- [ ] `ok/semicolons/semicolons.R` (easy)
+- [ ] `ok/if_statement.R` (easy)
+
+- [ ] `ok/unary_expressions.R` (medium)
+- [ ] `ok/subset.R` (medium)
+- [ ] `ok/subset2.R` (medium)
+- [ ] `ok/extract_expression.R` (medium)
+- [ ] `ok/namespace_expression.R` (medium)
+- [ ] `ok/function_definition.R` (medium)
+- [ ] `ok/for_statement.R` (medium)
+- [ ] `ok/while_statement.R` (medium)
+- [ ] `ok/value/double_value.R` (medium)
+- [ ] `ok/value/integer_value.R` (medium)
+- [ ] `ok/value/string_value.R` (medium)
+- [ ] `ok/crlf/multiline_string_value.R` (medium)
+
+- [ ] `ok/keyword.R` (hard)
+- [ ] `ok/repeat_statement.R` (hard)
+- [ ] `ok/dots.R` (hard)
+- [ ] `ok/dot_dot_i.R` (hard)
+- [ ] `ok/value/complex_value.R` (hard)
+
+### AIR `error` cases (7)
+
+- [ ] `error/call/side_by_side_arguments.R` (easy)
+- [ ] `error/parenthesized_expression/empty.R` (easy)
+- [ ] `error/parenthesized_expression/multiple.R` (easy)
+- [ ] `error/namespace_expression/call_lhs_double_colon.R` (hard)
+- [ ] `error/namespace_expression/call_lhs_triple_colon.R` (hard)
+- [ ] `error/namespace_expression/chained_double_colon.R` (hard)
+- [ ] `error/namespace_expression/chained_triple_colon.R` (hard)
+
+### AIR `undefined` cases (2)
+
+- [ ] `undefined/extract_expression_error.R` (hard)
+- [ ] `undefined/namespace_expression_error.R` (hard)
+
 ## Phase 3: Rowan CST + validation
 
 - [x] Build direct rowan CST construction and expose debug-tree output.
