@@ -51,6 +51,7 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::And2 => SyntaxKind::AND2,
         TokKind::Equal2 => SyntaxKind::EQUAL2,
         TokKind::NotEqual => SyntaxKind::NOT_EQUAL,
+        TokKind::Bang => SyntaxKind::BANG,
         TokKind::LessThan => SyntaxKind::LESS_THAN,
         TokKind::LessThanOrEqual => SyntaxKind::LESS_THAN_OR_EQUAL,
         TokKind::GreaterThan => SyntaxKind::GREATER_THAN,

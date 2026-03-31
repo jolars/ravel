@@ -62,6 +62,8 @@ fn fixture_names() -> &'static [&'static str] {
         "expr_extract_namespace",
         "expr_newline_binary_break",
         "expr_separators_tokens",
+        "expr_unary",
+        "expr_dotted_ident",
         "expr_missing_rhs",
         "expr_unexpected_prefix_op",
         "if_simple",
@@ -85,5 +87,9 @@ fn fixture_names() -> &'static [&'static str] {
         "function_missing_body",
         "function_missing_rparen_body",
         "unclosed_block",
+        "call_simple",
+        "call_named_args",
+        "call_mixed_args",
+        "stmt_semicolon_separator",
     ]
 }

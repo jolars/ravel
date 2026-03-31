@@ -34,6 +34,7 @@ pub(crate) enum TokKind {
     And2,
     Equal2,
     NotEqual,
+    Bang,
     LessThan,
     LessThanOrEqual,
     GreaterThan,
@@ -326,6 +327,17 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     continue;
                 }
 
+                if c == '!' {
+                    out.push(Token {
+                        kind: TokKind::Bang,
+                        text: "!".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
                 if i + 2 < bytes.len() && &input[i..i + 3] == ":::" {
                     out.push(Token {
                         kind: TokKind::Colon3,
@@ -572,7 +584,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     i += 1;
                     while i < bytes.len() {
                         let ch = bytes[i] as char;
-                        if !(ch.is_ascii_alphanumeric() || ch == '_') {
+                        if !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '.') {
                             break;
                         }
                         i += 1;
@@ -632,5 +644,12 @@ mod tests {
         assert_eq!(tokens[1].kind, TokKind::Newline);
         assert_eq!(tokens[1].text, "\r");
         assert_eq!(tokens[2].kind, TokKind::Ident);
+    }
+
+    #[test]
+    fn lexes_dotted_identifier_as_single_ident_token() {
+        let tokens = lex("is.null(x)");
+        assert_eq!(tokens[0].kind, TokKind::Ident);
+        assert_eq!(tokens[0].text, "is.null");
     }
 }

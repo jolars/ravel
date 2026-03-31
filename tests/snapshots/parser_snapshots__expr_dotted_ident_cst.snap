@@ -1,0 +1,29 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..49
+  UNARY_EXPR@0..11
+    BANG@0..1 "!"
+    CALL_EXPR@1..11
+      IDENT@1..8 "is.null"
+      LPAREN@8..9 "("
+      ARG_LIST@9..10
+        ARG@9..10
+          IDENT@9..10 "x"
+      RPAREN@10..11 ")"
+  NEWLINE@11..12 "\n"
+  ASSIGNMENT_EXPR@12..29
+    IDENT@12..13 "x"
+    WHITESPACE@13..14 " "
+    ASSIGN_LEFT@14..16 "<-"
+    WHITESPACE@16..17 " "
+    IDENT@17..29 "dplyr.filter"
+  NEWLINE@29..30 "\n"
+  ASSIGNMENT_EXPR@30..48
+    IDENT@30..40 "mean.na.rm"
+    WHITESPACE@40..41 " "
+    ASSIGN_LEFT@41..43 "<-"
+    WHITESPACE@43..44 " "
+    IDENT@44..48 "TRUE"
+  NEWLINE@48..49 "\n"

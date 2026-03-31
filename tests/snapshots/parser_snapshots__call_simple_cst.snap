@@ -1,0 +1,48 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..31
+  CALL_EXPR@0..3
+    IDENT@0..1 "f"
+    LPAREN@1..2 "("
+    ARG_LIST@2..2
+    RPAREN@2..3 ")"
+  NEWLINE@3..4 "\n"
+  CALL_EXPR@4..8
+    IDENT@4..5 "g"
+    LPAREN@5..6 "("
+    ARG_LIST@6..7
+      ARG@6..7
+        INT@6..7 "1"
+    RPAREN@7..8 ")"
+  NEWLINE@8..9 "\n"
+  CALL_EXPR@9..19
+    IDENT@9..10 "h"
+    LPAREN@10..11 "("
+    ARG_LIST@11..18
+      ARG@11..12
+        IDENT@11..12 "x"
+      COMMA@12..13 ","
+      WHITESPACE@13..14 " "
+      ARG@14..15
+        IDENT@14..15 "y"
+      COMMA@15..16 ","
+      WHITESPACE@16..17 " "
+      ARG@17..18
+        IDENT@17..18 "z"
+    RPAREN@18..19 ")"
+  NEWLINE@19..20 "\n"
+  CALL_EXPR@20..30
+    IDENT@20..23 "foo"
+    LPAREN@23..24 "("
+    ARG_LIST@24..29
+      ARG@24..29
+        BINARY_EXPR@24..29
+          INT@24..25 "1"
+          WHITESPACE@25..26 " "
+          PLUS@26..27 "+"
+          WHITESPACE@27..28 " "
+          INT@28..29 "2"
+    RPAREN@29..30 ")"
+  NEWLINE@30..31 "\n"

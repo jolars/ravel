@@ -30,5 +30,10 @@ fn fixture_text(name: &str, file: &str) -> String {
 }
 
 fn fixture_names() -> &'static [&'static str] {
-    &["noop_assignment", "noop_if_else_block", "noop_comments"]
+    &[
+        "noop_assignment",
+        "noop_if_else_block",
+        "noop_comments",
+        "noop_unary",
+    ]
 }

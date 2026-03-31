@@ -89,6 +89,17 @@ fn parse_expr_with_mode(
     let mut lhs = parse_prefix(tokens, start, diagnostics, allow_newline_prefix)?;
 
     loop {
+        // Check for function call: expr(...)
+        // No newline is allowed between the callee and `(` — `f\n(x)` is two statements in R.
+        let after_lhs = skip_ws(tokens, lhs.end);
+        if matches!(
+            tokens.get(after_lhs).map(|t| &t.kind),
+            Some(TokKind::LParen)
+        ) {
+            lhs = parse_call_expr(tokens, lhs, after_lhs, diagnostics);
+            continue;
+        }
+
         let Some((op_idx, op)) = next_operator(tokens, lhs.end) else {
             break;
         };
@@ -185,6 +196,27 @@ fn parse_prefix(
     let tok = tokens.get(i)?;
 
     match tok.kind {
+        TokKind::Plus | TokKind::Minus | TokKind::Bang => {
+            let operand_start = i + 1;
+            let Some(operand) = parse_expr_with_mode(tokens, operand_start, 130, diagnostics, true)
+            else {
+                push_token_diagnostic(diagnostics, "expected operand for unary operator", tok);
+                return Some(error_expr_to_line_end(tokens, i, operand_start));
+            };
+            let mut events = Vec::new();
+            events.push(Event::Start(SyntaxKind::UNARY_EXPR));
+            events.push(Event::Tok(i));
+            for idx in (i + 1)..operand.start {
+                events.push(Event::Tok(idx));
+            }
+            events.extend(operand.events);
+            events.push(Event::Finish);
+            Some(ExprParse {
+                start: i,
+                end: operand.end,
+                events,
+            })
+        }
         TokKind::Ident
         | TokKind::Int
         | TokKind::Float
@@ -242,9 +274,7 @@ fn parse_prefix(
             })
         }
         TokKind::LBrace => parse_block_expr(tokens, i, diagnostics),
-        TokKind::Plus
-        | TokKind::Minus
-        | TokKind::Star
+        TokKind::Star
         | TokKind::Slash
         | TokKind::Caret
         | TokKind::AssignLeft
@@ -324,6 +354,15 @@ fn parse_block_expr(
             });
         }
 
+        // Consume newlines and semicolons as statement separators.
+        if matches!(tok.kind, TokKind::Newline | TokKind::Semicolon) {
+            for idx in i..=next {
+                events.push(Event::Tok(idx));
+            }
+            i = next + 1;
+            continue;
+        }
+
         if let Some(expr) = parse_expr(tokens, i, 0, diagnostics) {
             for idx in i..expr.start {
                 events.push(Event::Tok(idx));
@@ -337,10 +376,135 @@ fn parse_block_expr(
     }
 }
 
+/// Returns true if tokens starting at `i` match the pattern `ident =` (named argument),
+/// where `=` is not `==`.
+fn is_named_arg(tokens: &[Token], i: usize) -> bool {
+    if !matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Ident)) {
+        return false;
+    }
+    let next = skip_ws(tokens, i + 1);
+    matches!(tokens.get(next).map(|t| &t.kind), Some(TokKind::AssignEq))
+}
+
+fn parse_call_expr(
+    tokens: &[Token],
+    callee: ExprParse,
+    lparen_idx: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> ExprParse {
+    let mut events = vec![Event::Start(SyntaxKind::CALL_EXPR)];
+    events.extend(callee.events);
+    // Whitespace between callee end and `(`
+    for idx in callee.end..lparen_idx {
+        events.push(Event::Tok(idx));
+    }
+    events.push(Event::Tok(lparen_idx)); // (
+
+    events.push(Event::Start(SyntaxKind::ARG_LIST));
+    let mut i = lparen_idx + 1;
+
+    loop {
+        // Skip whitespace and newlines within the argument list.
+        let next_i = skip_ws_and_newlines(tokens, i);
+        for idx in i..next_i {
+            events.push(Event::Tok(idx));
+        }
+        i = next_i;
+
+        // End of argument list.
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::RParen) | None) {
+            break;
+        }
+
+        // Empty argument (leading or consecutive comma).
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
+            events.push(Event::Start(SyntaxKind::ARG));
+            events.push(Event::Finish);
+            events.push(Event::Tok(i)); // ,
+            i += 1;
+            continue;
+        }
+
+        events.push(Event::Start(SyntaxKind::ARG));
+
+        if is_named_arg(tokens, i) {
+            // Named argument: ident = expr
+            events.push(Event::Tok(i)); // ident
+            let eq_idx = skip_ws(tokens, i + 1);
+            for idx in (i + 1)..eq_idx {
+                events.push(Event::Tok(idx));
+            }
+            events.push(Event::Tok(eq_idx)); // =
+            let val_start = eq_idx + 1;
+            if let Some(val) = parse_expr(tokens, val_start, 0, diagnostics) {
+                for idx in val_start..val.start {
+                    events.push(Event::Tok(idx));
+                }
+                events.extend(val.events);
+                i = val.end;
+            } else {
+                i = val_start;
+            }
+        } else {
+            // Positional argument.
+            if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+                for idx in i..arg.start {
+                    events.push(Event::Tok(idx));
+                }
+                events.extend(arg.events);
+                i = arg.end;
+            } else {
+                events.push(Event::Tok(i));
+                i += 1;
+            }
+        }
+
+        events.push(Event::Finish); // ARG
+
+        // Skip whitespace/newlines after arg, then consume optional comma.
+        let next_i = skip_ws_and_newlines(tokens, i);
+        for idx in i..next_i {
+            events.push(Event::Tok(idx));
+        }
+        i = next_i;
+
+        if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
+            events.push(Event::Tok(i)); // ,
+            i += 1;
+        }
+    }
+
+    events.push(Event::Finish); // ARG_LIST
+
+    // Closing paren (may have trailing whitespace/newlines before it).
+    let next_i = skip_ws_and_newlines(tokens, i);
+    for idx in i..next_i {
+        events.push(Event::Tok(idx));
+    }
+    i = next_i;
+
+    if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::RParen)) {
+        events.push(Event::Tok(i));
+        i += 1;
+    } else if let Some(tok) = tokens.get(lparen_idx) {
+        push_token_diagnostic(diagnostics, "expected ')' to close function call", tok);
+    }
+
+    events.push(Event::Finish); // CALL_EXPR
+
+    ExprParse {
+        start: callee.start,
+        end: i,
+        events,
+    }
+}
+
 fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
     // Binding powers are aligned to AIR's operator precedence tiers:
     // LogicalOr (5), LogicalAnd (6), Relational (8), Additive (9),
     // Multiplicative (10), Special (11), Colon (12), Tilde (4), Exponential (14).
+    // Namespace/extract operators (`::`, `:::`, `$`, `@`) bind tighter than
+    // exponentiation and are treated as left-associative in this CST parser.
     match kind {
         TokKind::Or | TokKind::Or2 => Some((50, 51)),
         TokKind::And | TokKind::And2 => Some((60, 61)),
@@ -356,6 +520,7 @@ fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
         TokKind::Colon => Some((120, 121)),
         TokKind::Tilde => Some((40, 41)),
         TokKind::Caret => Some((140, 140)),
+        TokKind::Colon2 | TokKind::Colon3 | TokKind::Dollar | TokKind::At => Some((150, 151)),
         _ => None,
     }
 }

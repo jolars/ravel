@@ -19,7 +19,10 @@ pub fn parse(text: &str) -> ParseOutput {
 
     let mut i = 0usize;
     while i < tokens.len() {
-        if matches!(tokens[i].kind, TokKind::Whitespace | TokKind::Newline) {
+        if matches!(
+            tokens[i].kind,
+            TokKind::Whitespace | TokKind::Newline | TokKind::Semicolon
+        ) {
             root_events.push(Event::Tok(i));
             i += 1;
             continue;

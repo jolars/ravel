@@ -164,8 +164,10 @@ fn format_expr_element(
 fn format_expr_node(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
     match node.kind() {
         SyntaxKind::ASSIGNMENT_EXPR => format_assignment_expr(node, indent),
+        SyntaxKind::UNARY_EXPR => format_unary_expr(node, indent),
         SyntaxKind::BINARY_EXPR => format_binary_expr(node, indent),
         SyntaxKind::PAREN_EXPR => format_paren_expr(node, indent),
+        SyntaxKind::CALL_EXPR => format_call_expr(node, indent),
         SyntaxKind::IF_EXPR => format_if_expr(node, indent),
         SyntaxKind::BLOCK_EXPR => format_block_expr(node, indent),
         kind => Err(FormatError::UnsupportedConstruct {
@@ -173,6 +175,29 @@ fn format_expr_node(node: &SyntaxNode, indent: usize) -> Result<String, FormatEr
             snippet: node.text().to_string(),
         }),
     }
+}
+
+fn format_unary_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let op_idx = elements
+        .iter()
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(tok.kind(), SyntaxKind::PLUS | SyntaxKind::MINUS | SyntaxKind::BANG)
+            )
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "unary operator not found",
+            snippet: node.text().to_string(),
+        })?;
+    let op = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => tok.text().to_string(),
+        NodeOrToken::Node(_) => unreachable!(),
+    };
+    let rhs = format_expr_segment(&elements[op_idx + 1..], "unary operand", indent)?;
+    Ok(format!("{op}{rhs}"))
 }
 
 fn format_assignment_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
@@ -251,6 +276,67 @@ fn format_binary_expr(node: &SyntaxNode, indent: usize) -> Result<String, Format
     let lhs = format_expr_segment(&elements[..op_idx], "binary lhs", indent)?;
     let rhs = format_expr_segment(&elements[op_idx + 1..], "binary rhs", indent)?;
     Ok(format!("{lhs} {op} {rhs}"))
+}
+
+fn format_call_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let lparen_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '(' in call expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let callee = format_expr_segment(&elements[..lparen_idx], "call callee", indent)?;
+
+    let arg_list = elements
+        .iter()
+        .find_map(|el| match el {
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG_LIST => Some(n.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing arg list in call expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let formatted_args = format_arg_list(&arg_list, indent)?;
+    Ok(format!("{callee}({formatted_args})"))
+}
+
+fn format_arg_list(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
+    let args: Vec<_> = node
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .collect();
+    let mut formatted = Vec::new();
+    for arg in &args {
+        let s = format_arg(arg, indent)?;
+        // Skip empty args (trailing/leading commas produce empty ARG nodes)
+        if !s.is_empty() {
+            formatted.push(s);
+        }
+    }
+    Ok(formatted.join(", "))
+}
+
+fn format_arg(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    if elements.is_empty() {
+        return Ok(String::new());
+    }
+    // Named argument: find ASSIGN_EQ token
+    if let Some(eq_idx) = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        let name = format_expr_segment(&elements[..eq_idx], "named arg name", indent)?;
+        let value = format_expr_segment(&elements[eq_idx + 1..], "named arg value", indent)?;
+        return Ok(format!("{name} = {value}"));
+    }
+    // Positional argument
+    format_expr_segment(&elements, "positional arg", indent)
 }
 
 fn format_paren_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
@@ -393,9 +479,11 @@ fn format_block_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatE
 
 fn format_atom_token(token: &SyntaxToken<RLanguage>) -> Result<String, FormatError> {
     match token.kind() {
-        SyntaxKind::IDENT | SyntaxKind::INT | SyntaxKind::FLOAT | SyntaxKind::STRING => {
-            Ok(token.text().to_string())
-        }
+        SyntaxKind::IDENT
+        | SyntaxKind::INT
+        | SyntaxKind::FLOAT
+        | SyntaxKind::STRING
+        | SyntaxKind::BANG => Ok(token.text().to_string()),
         kind => Err(FormatError::UnsupportedConstruct {
             kind,
             snippet: token.text().to_string(),
@@ -415,7 +503,7 @@ fn split_lines(
             if token.kind() == SyntaxKind::WHITESPACE {
                 continue;
             }
-            if token.kind() == SyntaxKind::NEWLINE {
+            if token.kind() == SyntaxKind::NEWLINE || token.kind() == SyntaxKind::SEMICOLON {
                 if !current.is_empty() {
                     lines.push(std::mem::take(&mut current));
                 }
