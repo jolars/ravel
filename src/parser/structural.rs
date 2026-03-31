@@ -6,6 +6,16 @@ use crate::parser::lexer::{TokKind, Token};
 use crate::parser::recovery::push_empty_error_node;
 use crate::syntax::SyntaxKind;
 
+fn skip_for_clause_trivia(tokens: &[Token], mut i: usize) -> usize {
+    while matches!(
+        tokens.get(i).map(|t| &t.kind),
+        Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+    ) {
+        i += 1;
+    }
+    i
+}
+
 pub(crate) fn parse_if_expr(
     tokens: &[Token],
     start: usize,
@@ -196,7 +206,7 @@ pub(crate) fn parse_for_expr(
     let for_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::FOR_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let clause_start = skip_ws_and_newlines(tokens, cursor);
+    let clause_start = skip_for_clause_trivia(tokens, cursor);
     let mut saw_lparen = false;
 
     if matches!(
@@ -213,7 +223,7 @@ pub(crate) fn parse_for_expr(
         cursor = clause_start;
     }
 
-    let var_start = skip_ws_and_newlines(tokens, cursor);
+    let var_start = skip_for_clause_trivia(tokens, cursor);
     if matches!(tokens.get(var_start).map(|t| &t.kind), Some(TokKind::Ident)) {
         push_range(&mut events, cursor, var_start);
         events.push(Event::Tok(var_start));
@@ -229,7 +239,7 @@ pub(crate) fn parse_for_expr(
         cursor = var_start;
     }
 
-    let in_idx = skip_ws_and_newlines(tokens, cursor);
+    let in_idx = skip_for_clause_trivia(tokens, cursor);
     if matches!(tokens.get(in_idx).map(|t| &t.kind), Some(TokKind::InKw)) {
         push_range(&mut events, cursor, in_idx);
         events.push(Event::Tok(in_idx));
@@ -241,7 +251,7 @@ pub(crate) fn parse_for_expr(
         cursor = in_idx;
     }
 
-    let seq_start = skip_ws_and_newlines(tokens, cursor);
+    let seq_start = skip_for_clause_trivia(tokens, cursor);
     if let Some(seq_expr) = parse_expr(tokens, seq_start, 0, diagnostics) {
         push_range(&mut events, cursor, seq_expr.start);
         events.extend(seq_expr.events);
@@ -258,7 +268,7 @@ pub(crate) fn parse_for_expr(
     }
 
     if saw_lparen {
-        let clause_rparen = skip_ws_and_newlines(tokens, cursor);
+        let clause_rparen = skip_for_clause_trivia(tokens, cursor);
         if matches!(
             tokens.get(clause_rparen).map(|t| &t.kind),
             Some(TokKind::RParen)

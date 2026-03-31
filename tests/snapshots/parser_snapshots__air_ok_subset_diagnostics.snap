@@ -1,0 +1,211 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 22,
+        end: 23,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 23,
+        end: 24,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 33,
+        end: 34,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 34,
+        end: 35,
+    },
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 56,
+        end: 57,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 61,
+        end: 63,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 78,
+        end: 80,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 85,
+        end: 86,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 95,
+        end: 97,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 99,
+        end: 100,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 100,
+        end: 101,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 102,
+        end: 103,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 102,
+        end: 103,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 107,
+        end: 109,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 111,
+        end: 112,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 112,
+        end: 113,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 114,
+        end: 115,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 114,
+        end: 115,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 118,
+        end: 120,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 132,
+        end: 134,
+    },
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 141,
+        end: 142,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 145,
+        end: 158,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 159,
+        end: 161,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 165,
+        end: 167,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 173,
+        end: 175,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 187,
+        end: 202,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 203,
+        end: 205,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 221,
+        end: 223,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 241,
+        end: 243,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 263,
+        end: 264,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 265,
+        end: 275,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 278,
+        end: 280,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 286,
+        end: 296,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 314,
+        end: 315,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 316,
+        end: 326,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between subset arguments",
+        start: 330,
+        end: 331,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 134,
+        end: 135,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 109,
+        end: 110,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 97,
+        end: 98,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 80,
+        end: 81,
+    },
+    ParseDiagnostic {
+        message: "expected closing bracket in subset expression",
+        start: 53,
+        end: 54,
+    },
+]

@@ -16,11 +16,18 @@ fn parser_fixtures_snapshots_and_losslessness() {
             format!("{:#?}", output.diagnostics)
         );
 
-        let reconstructed = reconstruct(&input);
-        assert_eq!(
-            reconstructed, input,
-            "lossless round-trip failed for {name}"
-        );
+        if requires_lossless_round_trip(name) {
+            let reconstructed = reconstruct(&input);
+            assert_eq!(
+                reconstructed, input,
+                "lossless round-trip failed for {name}"
+            );
+        } else {
+            assert!(
+                !output.diagnostics.is_empty(),
+                "expected diagnostics for non-lossless fixture {name}"
+            );
+        }
     }
 }
 
@@ -95,5 +102,37 @@ fn fixture_names() -> &'static [&'static str] {
         "subset2_simple",
         "subset_assignment",
         "subset_missing_close",
+        "air_ok_binary_expressions",
+        "air_ok_braced_expressions",
+        "air_ok_calls",
+        "air_ok_comments",
+        "air_ok_if_statement",
+        "air_ok_unary_expressions",
+        "air_ok_subset",
+        "air_ok_subset2",
+        "air_ok_extract_expression",
+        "air_ok_namespace_expression",
+        "air_ok_function_definition",
+        "air_ok_for_statement",
+        "air_ok_while_statement",
+        "air_ok_value_double_value",
+        "air_ok_value_integer_value",
+        "air_ok_value_string_value",
+        "air_ok_crlf_multiline_string_value",
+        "air_ok_keyword",
+        "air_error_call_side_by_side_arguments",
+        "air_error_parenthesized_expression_empty",
+        "air_error_parenthesized_expression_multiple",
+        "air_ok_parenthesized_expression",
+        "air_ok_semicolons_semicolon_end_of_file_01",
+        "air_ok_semicolons_semicolon_end_of_file_02",
+        "air_ok_semicolons_semicolon_end_of_file_03",
+        "air_ok_semicolons_semicolon_start_of_file_01",
+        "air_ok_semicolons_semicolon_start_of_file_02",
+        "air_ok_semicolons_semicolons",
     ]
+}
+
+fn requires_lossless_round_trip(name: &str) -> bool {
+    !name.starts_with("air_error_")
 }

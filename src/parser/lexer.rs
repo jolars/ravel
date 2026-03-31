@@ -574,33 +574,153 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 if c.is_ascii_digit() {
                     let start = i;
                     i += 1;
-                    while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
-                        i += 1;
-                    }
+                    let mut force_int = false;
+
+                    // Hex numeric literals: 0x... with optional binary exponent p[+/-]...
                     if i < bytes.len()
-                        && (bytes[i] as char) == '.'
-                        && i + 1 < bytes.len()
-                        && (bytes[i + 1] as char).is_ascii_digit()
+                        && bytes[start] as char == '0'
+                        && matches!(bytes[i] as char, 'x' | 'X')
                     {
-                        i += 1;
-                        while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                        i += 1; // consume x/X
+                        while i < bytes.len() && (bytes[i] as char).is_ascii_hexdigit() {
                             i += 1;
                         }
+
+                        if i < bytes.len() && (bytes[i] as char) == '.' {
+                            i += 1;
+                            while i < bytes.len() && (bytes[i] as char).is_ascii_hexdigit() {
+                                i += 1;
+                            }
+                        }
+
+                        if i < bytes.len() && matches!(bytes[i] as char, 'p' | 'P') {
+                            i += 1;
+                            if i < bytes.len() && matches!(bytes[i] as char, '+' | '-') {
+                                i += 1;
+                            }
+                            while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                                i += 1;
+                            }
+                        }
+
+                        if i < bytes.len() && matches!(bytes[i] as char, 'L' | 'l') {
+                            force_int = true;
+                            i += 1;
+                        }
+
                         out.push(Token {
-                            kind: TokKind::Float,
+                            kind: if force_int {
+                                TokKind::Int
+                            } else {
+                                // R hex numeric constants are doubles unless integer-suffixed.
+                                TokKind::Float
+                            },
                             text: input[start..i].to_string(),
                             start,
                             end: i,
                         });
                     } else {
+                        while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                            i += 1;
+                        }
+
+                        let mut is_float = false;
+                        if i < bytes.len()
+                            && (bytes[i] as char) == '.'
+                            && i + 1 < bytes.len()
+                            && (bytes[i + 1] as char).is_ascii_digit()
+                        {
+                            is_float = true;
+                            i += 1;
+                            while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                                i += 1;
+                            }
+                        }
+
+                        if i < bytes.len() && matches!(bytes[i] as char, 'e' | 'E') {
+                            let exp_start = i;
+                            let mut j = i + 1;
+                            if j < bytes.len() && matches!(bytes[j] as char, '+' | '-') {
+                                j += 1;
+                            }
+                            let mut has_exp_digits = false;
+                            while j < bytes.len() && (bytes[j] as char).is_ascii_digit() {
+                                has_exp_digits = true;
+                                j += 1;
+                            }
+                            if has_exp_digits {
+                                is_float = true;
+                                i = j;
+                            } else {
+                                i = exp_start;
+                            }
+                        }
+
+                        if i < bytes.len() && matches!(bytes[i] as char, 'L' | 'l') {
+                            force_int = true;
+                            i += 1;
+                        }
+
                         out.push(Token {
-                            kind: TokKind::Int,
+                            kind: if force_int {
+                                TokKind::Int
+                            } else if is_float {
+                                TokKind::Float
+                            } else {
+                                TokKind::Int
+                            },
                             text: input[start..i].to_string(),
                             start,
                             end: i,
                         });
                     }
                     continue;
+                }
+
+                // R raw strings: r"delimiter(content)delimiter"
+                if c == 'r' && i + 1 < bytes.len() && (bytes[i + 1] as char) == '"' {
+                    let start = i;
+                    let mut j = i + 2;
+                    let delim_start = j;
+                    let mut matched_raw = false;
+                    while j < bytes.len() && (bytes[j] as char) != '(' {
+                        let ch = bytes[j] as char;
+                        if ch == '"' || ch == '\n' || ch == '\r' {
+                            break;
+                        }
+                        j += 1;
+                    }
+
+                    if j < bytes.len() && (bytes[j] as char) == '(' {
+                        let delimiter = &input[delim_start..j];
+                        let mut k = j + 1;
+                        while k < bytes.len() {
+                            if (bytes[k] as char) == ')' {
+                                let after_close = k + 1;
+                                let delim_end = after_close + delimiter.len();
+                                if delim_end < bytes.len()
+                                    && &input[after_close..delim_end] == delimiter
+                                    && (bytes[delim_end] as char) == '"'
+                                {
+                                    let end = delim_end + 1;
+                                    out.push(Token {
+                                        kind: TokKind::String,
+                                        text: input[start..end].to_string(),
+                                        start,
+                                        end,
+                                    });
+                                    i = end;
+                                    matched_raw = true;
+                                    break;
+                                }
+                            }
+                            k += 1;
+                        }
+                    }
+
+                    if matched_raw {
+                        continue;
+                    }
                 }
 
                 if c.is_ascii_alphabetic() || c == '_' {
@@ -675,5 +795,53 @@ mod tests {
         let tokens = lex("is.null(x)");
         assert_eq!(tokens[0].kind, TokKind::Ident);
         assert_eq!(tokens[0].text, "is.null");
+    }
+
+    #[test]
+    fn lexes_scientific_and_hex_doubles_as_single_float_tokens() {
+        let tokens = lex("1e6 0x123F 0x0p+123");
+        let number_tokens: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+
+        assert_eq!(number_tokens.len(), 3);
+        assert_eq!(number_tokens[0].kind, TokKind::Float);
+        assert_eq!(number_tokens[0].text, "1e6");
+        assert_eq!(number_tokens[1].kind, TokKind::Float);
+        assert_eq!(number_tokens[1].text, "0x123F");
+        assert_eq!(number_tokens[2].kind, TokKind::Float);
+        assert_eq!(number_tokens[2].text, "0x0p+123");
+    }
+
+    #[test]
+    fn lexes_integer_suffix_literals_as_single_int_tokens() {
+        let tokens = lex("1L 1e5L 0x123L 0x0p+10L");
+        let number_tokens: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+
+        assert_eq!(number_tokens.len(), 4);
+        for tok in &number_tokens {
+            assert_eq!(tok.kind, TokKind::Int);
+        }
+        assert_eq!(number_tokens[0].text, "1L");
+        assert_eq!(number_tokens[1].text, "1e5L");
+        assert_eq!(number_tokens[2].text, "0x123L");
+        assert_eq!(number_tokens[3].text, "0x0p+10L");
+    }
+
+    #[test]
+    fn lexes_raw_strings_as_single_string_tokens() {
+        let tokens = lex("r\"(hi)\" r\"-(a)-\" r\"(multi\nline)\"");
+        let string_tokens: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| matches!(t.kind, TokKind::String))
+            .collect();
+        assert_eq!(string_tokens.len(), 3);
+        assert_eq!(string_tokens[0].text, "r\"(hi)\"");
+        assert_eq!(string_tokens[1].text, "r\"-(a)-\"");
+        assert_eq!(string_tokens[2].text, "r\"(multi\nline)\"");
     }
 }

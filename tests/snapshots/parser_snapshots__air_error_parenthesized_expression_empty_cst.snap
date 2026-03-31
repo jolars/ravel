@@ -1,0 +1,8 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..2
+  ERROR@0..2
+    LPAREN@0..1 "("
+    RPAREN@1..2 ")"

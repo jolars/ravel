@@ -1,0 +1,256 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 24,
+        end: 25,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 25,
+        end: 26,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 35,
+        end: 36,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 36,
+        end: 37,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 87,
+        end: 88,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 97,
+        end: 99,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 101,
+        end: 102,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 102,
+        end: 103,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 104,
+        end: 105,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 104,
+        end: 105,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 109,
+        end: 111,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 113,
+        end: 114,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 114,
+        end: 115,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 116,
+        end: 117,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 116,
+        end: 117,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 120,
+        end: 122,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 124,
+        end: 125,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 125,
+        end: 126,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 132,
+        end: 134,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 136,
+        end: 137,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 137,
+        end: 138,
+    },
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 139,
+        end: 140,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 143,
+        end: 145,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 157,
+        end: 159,
+    },
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 166,
+        end: 167,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 170,
+        end: 183,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 184,
+        end: 186,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 190,
+        end: 192,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 198,
+        end: 200,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 212,
+        end: 227,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 228,
+        end: 230,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 246,
+        end: 248,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 266,
+        end: 268,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 288,
+        end: 289,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 290,
+        end: 300,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 303,
+        end: 305,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 311,
+        end: 321,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 339,
+        end: 340,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 341,
+        end: 351,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 355,
+        end: 356,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 370,
+        end: 418,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 419,
+        end: 421,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 436,
+        end: 438,
+    },
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 452,
+        end: 454,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 465,
+        end: 466,
+    },
+    ParseDiagnostic {
+        message: "expected ')' to close function call",
+        start: 159,
+        end: 160,
+    },
+    ParseDiagnostic {
+        message: "expected ')' to close function call",
+        start: 134,
+        end: 135,
+    },
+    ParseDiagnostic {
+        message: "expected ')' to close function call",
+        start: 111,
+        end: 112,
+    },
+    ParseDiagnostic {
+        message: "expected ')' to close function call",
+        start: 99,
+        end: 100,
+    },
+    ParseDiagnostic {
+        message: "expected ')' to close function call",
+        start: 82,
+        end: 83,
+    },
+]

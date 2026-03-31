@@ -1,0 +1,16 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected ')'",
+        start: 280,
+        end: 281,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 282,
+        end: 283,
+    },
+]

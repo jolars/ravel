@@ -1,0 +1,57 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..94
+  PAREN_EXPR@0..3
+    LPAREN@0..1 "("
+    INT@1..2 "1"
+    RPAREN@2..3 ")"
+  NEWLINE@3..4 "\n"
+  NEWLINE@4..5 "\n"
+  PAREN_EXPR@5..18
+    LPAREN@5..6 "("
+    BLOCK_EXPR@6..17
+      LBRACE@6..7 "{"
+      NEWLINE@7..8 "\n"
+      WHITESPACE@8..10 "  "
+      BINARY_EXPR@10..15
+        INT@10..11 "1"
+        WHITESPACE@11..12 " "
+        PLUS@12..13 "+"
+        WHITESPACE@13..14 " "
+        INT@14..15 "1"
+      NEWLINE@15..16 "\n"
+      RBRACE@16..17 "}"
+    RPAREN@17..18 ")"
+  NEWLINE@18..19 "\n"
+  NEWLINE@19..20 "\n"
+  PAREN_EXPR@20..25
+    LPAREN@20..21 "("
+    PAREN_EXPR@21..24
+      LPAREN@21..22 "("
+      INT@22..23 "1"
+      RPAREN@23..24 ")"
+    RPAREN@24..25 ")"
+  NEWLINE@25..26 "\n"
+  NEWLINE@26..27 "\n"
+  PAREN_EXPR@27..57
+    LPAREN@27..28 "("
+    WHITESPACE@28..29 " "
+    COMMENT@29..39 "# comment1"
+    NEWLINE@39..40 "\n"
+    WHITESPACE@40..42 "  "
+    COMMENT@42..52 "# comment2"
+    NEWLINE@52..53 "\n"
+    WHITESPACE@53..55 "  "
+    INT@55..56 "1"
+    WHITESPACE@56..57 " "
+  COMMENT@57..67 "# comment3"
+  NEWLINE@67..68 "\n"
+  WHITESPACE@68..70 "  "
+  COMMENT@70..80 "# comment4"
+  NEWLINE@80..81 "\n"
+  RPAREN@81..82 ")"
+  WHITESPACE@82..83 " "
+  COMMENT@83..93 "# comment5"
+  NEWLINE@93..94 "\n"

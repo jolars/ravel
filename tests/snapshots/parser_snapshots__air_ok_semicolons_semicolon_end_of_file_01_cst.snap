@@ -1,0 +1,10 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..49
+  COMMENT@0..45 "# https://github.com/ ..."
+  NEWLINE@45..46 "\n"
+  INT@46..47 "1"
+  SEMICOLON@47..48 ";"
+  NEWLINE@48..49 "\n"

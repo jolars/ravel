@@ -1,0 +1,18 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..68
+  COMMENT@0..59 "# Can't have two argu ..."
+  NEWLINE@59..60 "\n"
+  CALL_EXPR@60..67
+    IDENT@60..62 "fn"
+    LPAREN@62..63 "("
+    ARG_LIST@63..66
+      ARG@63..64
+        IDENT@63..64 "a"
+      WHITESPACE@64..65 " "
+      ARG@65..66
+        IDENT@65..66 "b"
+    RPAREN@66..67 ")"
+  NEWLINE@67..68 "\n"

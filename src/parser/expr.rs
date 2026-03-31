@@ -187,12 +187,18 @@ fn parse_prefix(
         }),
         TokKind::LParen => {
             let inner_start = i + 1;
-            let Some(inner) = parse_expr_with_mode(tokens, inner_start, 0, diagnostics, true)
-            else {
+            let mut expr_start = inner_start;
+            while matches!(
+                tokens.get(expr_start).map(|t| &t.kind),
+                Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+            ) {
+                expr_start += 1;
+            }
+            let Some(inner) = parse_expr_with_mode(tokens, expr_start, 0, diagnostics, true) else {
                 push_token_diagnostic(diagnostics, "expected expression after '('", tok);
                 return Some(error_expr_to_line_end(tokens, i, inner_start));
             };
-            let close_idx = skip_ws(tokens, inner.end);
+            let close_idx = skip_ws_and_newlines(tokens, inner.end);
             if !matches!(
                 tokens.get(close_idx).map(|t| &t.kind),
                 Some(TokKind::RParen)
@@ -201,6 +207,9 @@ fn parse_prefix(
                 let mut events = Vec::new();
                 events.push(Event::Start(SyntaxKind::PAREN_EXPR));
                 events.push(Event::Tok(i));
+                for idx in inner_start..inner.start {
+                    events.push(Event::Tok(idx));
+                }
                 events.extend(inner.events);
                 for idx in inner.end..close_idx {
                     events.push(Event::Tok(idx));
@@ -216,6 +225,9 @@ fn parse_prefix(
             let mut events = Vec::new();
             events.push(Event::Start(SyntaxKind::PAREN_EXPR));
             events.push(Event::Tok(i));
+            for idx in inner_start..inner.start {
+                events.push(Event::Tok(idx));
+            }
             events.extend(inner.events);
             for idx in inner.end..close_idx {
                 events.push(Event::Tok(idx));
@@ -414,6 +426,12 @@ fn is_named_arg(tokens: &[Token], i: usize) -> bool {
     matches!(tokens.get(next).map(|t| &t.kind), Some(TokKind::AssignEq))
 }
 
+fn has_newline(tokens: &[Token], start: usize, end: usize) -> bool {
+    tokens[start..end]
+        .iter()
+        .any(|t| t.kind == TokKind::Newline)
+}
+
 fn parse_call_expr(
     tokens: &[Token],
     callee: ExprParse,
@@ -431,9 +449,11 @@ fn parse_call_expr(
     events.push(Event::Start(SyntaxKind::ARG_LIST));
     let mut i = lparen_idx + 1;
 
+    let mut expect_delimiter = false;
     loop {
         // Skip whitespace and newlines within the argument list.
         let next_i = skip_ws_and_newlines(tokens, i);
+        let had_newline_gap = has_newline(tokens, i, next_i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
         }
@@ -444,12 +464,20 @@ fn parse_call_expr(
             break;
         }
 
+        if expect_delimiter
+            && !had_newline_gap
+            && let Some(tok) = tokens.get(i)
+        {
+            push_token_diagnostic(diagnostics, "expected ',' between arguments", tok);
+        }
+
         // Empty argument (leading or consecutive comma).
         if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
             events.push(Event::Start(SyntaxKind::ARG));
             events.push(Event::Finish);
             events.push(Event::Tok(i)); // ,
             i += 1;
+            expect_delimiter = false;
             continue;
         }
 
@@ -488,6 +516,7 @@ fn parse_call_expr(
         }
 
         events.push(Event::Finish); // ARG
+        expect_delimiter = true;
 
         // Skip whitespace/newlines after arg, then consume optional comma.
         let next_i = skip_ws_and_newlines(tokens, i);
@@ -499,6 +528,7 @@ fn parse_call_expr(
         if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
             events.push(Event::Tok(i)); // ,
             i += 1;
+            expect_delimiter = false;
         }
     }
 
@@ -577,8 +607,10 @@ fn parse_bracket_expr(
     events.push(Event::Start(SyntaxKind::ARG_LIST));
     let mut i = open_idx + 1;
 
+    let mut expect_delimiter = false;
     loop {
         let next_i = skip_ws_and_newlines(tokens, i);
+        let had_newline_gap = has_newline(tokens, i, next_i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
         }
@@ -590,11 +622,19 @@ fn parse_bracket_expr(
             break;
         }
 
+        if expect_delimiter
+            && !had_newline_gap
+            && let Some(tok) = tokens.get(i)
+        {
+            push_token_diagnostic(diagnostics, "expected ',' between subset arguments", tok);
+        }
+
         if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
             events.push(Event::Start(SyntaxKind::ARG));
             events.push(Event::Finish);
             events.push(Event::Tok(i));
             i += 1;
+            expect_delimiter = false;
             continue;
         }
 
@@ -610,6 +650,7 @@ fn parse_bracket_expr(
             i += 1;
         }
         events.push(Event::Finish);
+        expect_delimiter = true;
 
         let next_i = skip_ws_and_newlines(tokens, i);
         for idx in i..next_i {
@@ -619,6 +660,7 @@ fn parse_bracket_expr(
         if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
             events.push(Event::Tok(i));
             i += 1;
+            expect_delimiter = false;
         }
     }
 

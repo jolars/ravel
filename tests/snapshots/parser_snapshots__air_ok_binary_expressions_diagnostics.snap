@@ -1,0 +1,21 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 30,
+        end: 31,
+    },
+    ParseDiagnostic {
+        message: "unexpected operator at expression start",
+        start: 148,
+        end: 149,
+    },
+    ParseDiagnostic {
+        message: "expected right-hand side for binary operator",
+        start: 227,
+        end: 228,
+    },
+]

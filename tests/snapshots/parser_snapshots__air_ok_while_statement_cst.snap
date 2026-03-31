@@ -1,0 +1,54 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..67
+  WHILE_EXPR@0..17
+    WHILE_KW@0..5 "while"
+    LPAREN@5..6 "("
+    IDENT@6..10 "TRUE"
+    RPAREN@10..11 ")"
+    WHITESPACE@11..12 " "
+    IDENT@12..17 "FALSE"
+  NEWLINE@17..18 "\n"
+  NEWLINE@18..19 "\n"
+  WHILE_EXPR@19..33
+    WHILE_KW@19..24 "while"
+    LPAREN@24..25 "("
+    IDENT@25..29 "TRUE"
+    RPAREN@29..30 ")"
+    WHITESPACE@30..31 " "
+    BLOCK_EXPR@31..33
+      LBRACE@31..32 "{"
+      RBRACE@32..33 "}"
+  NEWLINE@33..34 "\n"
+  NEWLINE@34..35 "\n"
+  WHILE_EXPR@35..48
+    WHILE_KW@35..40 "while"
+    LPAREN@40..41 "("
+    IDENT@41..42 "a"
+    RPAREN@42..43 ")"
+    WHITESPACE@43..44 " "
+    BLOCK_EXPR@44..48
+      LBRACE@44..45 "{"
+      NEWLINE@45..46 "\n"
+      NEWLINE@46..47 "\n"
+      RBRACE@47..48 "}"
+  NEWLINE@48..49 "\n"
+  NEWLINE@49..50 "\n"
+  WHILE_EXPR@50..66
+    WHILE_KW@50..55 "while"
+    LPAREN@55..56 "("
+    CALL_EXPR@56..60
+      IDENT@56..58 "fn"
+      LPAREN@58..59 "("
+      ARG_LIST@59..59
+      RPAREN@59..60 ")"
+    RPAREN@60..61 ")"
+    WHITESPACE@61..62 " "
+    BLOCK_EXPR@62..66
+      LBRACE@62..63 "{"
+      NEWLINE@63..64 "\n"
+      NEWLINE@64..65 "\n"
+      RBRACE@65..66 "}"
+  NEWLINE@66..67 "\n"

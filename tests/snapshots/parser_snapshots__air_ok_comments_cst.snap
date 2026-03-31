@@ -1,0 +1,18 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..37
+  COMMENT@0..9 "# Leading"
+  NEWLINE@9..10 "\n"
+  BINARY_EXPR@10..15
+    INT@10..11 "1"
+    WHITESPACE@11..12 " "
+    PLUS@12..13 "+"
+    WHITESPACE@13..14 " "
+    INT@14..15 "1"
+  WHITESPACE@15..16 " "
+  COMMENT@16..26 "# Trailing"
+  NEWLINE@26..27 "\n"
+  COMMENT@27..36 "# Leading"
+  NEWLINE@36..37 "\n"

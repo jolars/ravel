@@ -1,0 +1,8 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..3
+  SEMICOLON@0..1 ";"
+  INT@1..2 "1"
+  NEWLINE@2..3 "\n"

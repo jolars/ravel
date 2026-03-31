@@ -1,0 +1,31 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..92
+  IDENT@0..6 "return"
+  NEWLINE@6..7 "\n"
+  IDENT@7..12 "break"
+  NEWLINE@12..13 "\n"
+  IDENT@13..17 "next"
+  NEWLINE@17..18 "\n"
+  IDENT@18..22 "TRUE"
+  NEWLINE@22..23 "\n"
+  IDENT@23..28 "FALSE"
+  NEWLINE@28..29 "\n"
+  IDENT@29..33 "NULL"
+  NEWLINE@33..34 "\n"
+  IDENT@34..37 "Inf"
+  NEWLINE@37..38 "\n"
+  IDENT@38..41 "NaN"
+  NEWLINE@41..42 "\n"
+  IDENT@42..44 "NA"
+  NEWLINE@44..45 "\n"
+  IDENT@45..56 "NA_integer_"
+  NEWLINE@56..57 "\n"
+  IDENT@57..65 "NA_real_"
+  NEWLINE@65..66 "\n"
+  IDENT@66..77 "NA_complex_"
+  NEWLINE@77..78 "\n"
+  IDENT@78..91 "NA_character_"
+  NEWLINE@91..92 "\n"

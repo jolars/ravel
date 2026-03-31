@@ -1,0 +1,15 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..11
+  PAREN_EXPR@0..8
+    LPAREN@0..1 "("
+    NEWLINE@1..2 "\n"
+    WHITESPACE@2..4 "  "
+    IDENT@4..5 "a"
+    NEWLINE@5..6 "\n"
+    WHITESPACE@6..8 "  "
+  IDENT@8..9 "b"
+  NEWLINE@9..10 "\n"
+  RPAREN@10..11 ")"

@@ -1,0 +1,141 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..114
+  BINARY_EXPR@0..3
+    IDENT@0..1 "a"
+    DOLLAR@1..2 "$"
+    IDENT@2..3 "b"
+  NEWLINE@3..4 "\n"
+  BINARY_EXPR@4..7
+    IDENT@4..5 "a"
+    AT@5..6 "@"
+    IDENT@6..7 "b"
+  NEWLINE@7..8 "\n"
+  NEWLINE@8..9 "\n"
+  ERROR@9..15
+    IDENT@9..10 "a"
+    DOLLAR@10..11 "$"
+    ERROR@11..12 "`"
+    IDENT@12..13 "b"
+    ERROR@13..14 "`"
+    NEWLINE@14..15 "\n"
+  ERROR@15..21
+    IDENT@15..16 "a"
+    AT@16..17 "@"
+    ERROR@17..18 "`"
+    IDENT@18..19 "b"
+    ERROR@19..20 "`"
+    NEWLINE@20..21 "\n"
+  NEWLINE@21..22 "\n"
+  BINARY_EXPR@22..27
+    IDENT@22..23 "a"
+    DOLLAR@23..24 "$"
+    STRING@24..27 "\"b\""
+  NEWLINE@27..28 "\n"
+  BINARY_EXPR@28..33
+    IDENT@28..29 "a"
+    AT@29..30 "@"
+    STRING@30..33 "\"b\""
+  NEWLINE@33..34 "\n"
+  NEWLINE@34..35 "\n"
+  BINARY_EXPR@35..40
+    CALL_EXPR@35..38
+      IDENT@35..36 "a"
+      LPAREN@36..37 "("
+      ARG_LIST@37..37
+      RPAREN@37..38 ")"
+    DOLLAR@38..39 "$"
+    IDENT@39..40 "b"
+  NEWLINE@40..41 "\n"
+  BINARY_EXPR@41..46
+    CALL_EXPR@41..44
+      IDENT@41..42 "a"
+      LPAREN@42..43 "("
+      ARG_LIST@43..43
+      RPAREN@43..44 ")"
+    AT@44..45 "@"
+    IDENT@45..46 "b"
+  NEWLINE@46..47 "\n"
+  NEWLINE@47..48 "\n"
+  BINARY_EXPR@48..53
+    BINARY_EXPR@48..51
+      IDENT@48..49 "a"
+      DOLLAR@49..50 "$"
+      IDENT@50..51 "b"
+    DOLLAR@51..52 "$"
+    IDENT@52..53 "c"
+  NEWLINE@53..54 "\n"
+  BINARY_EXPR@54..59
+    BINARY_EXPR@54..57
+      IDENT@54..55 "a"
+      AT@55..56 "@"
+      IDENT@56..57 "b"
+    AT@57..58 "@"
+    IDENT@58..59 "c"
+  NEWLINE@59..60 "\n"
+  NEWLINE@60..61 "\n"
+  BINARY_EXPR@61..66
+    IDENT@61..62 "a"
+    DOLLAR@62..63 "$"
+    CALL_EXPR@63..66
+      IDENT@63..64 "b"
+      LPAREN@64..65 "("
+      ARG_LIST@65..65
+      RPAREN@65..66 ")"
+  NEWLINE@66..67 "\n"
+  BINARY_EXPR@67..72
+    IDENT@67..68 "a"
+    AT@68..69 "@"
+    CALL_EXPR@69..72
+      IDENT@69..70 "b"
+      LPAREN@70..71 "("
+      ARG_LIST@71..71
+      RPAREN@71..72 ")"
+  NEWLINE@72..73 "\n"
+  NEWLINE@73..74 "\n"
+  ERROR@74..80
+    IDENT@74..75 "a"
+    DOLLAR@75..76 "$"
+    ERROR@76..77 "."
+    ERROR@77..78 "."
+    ERROR@78..79 "."
+    NEWLINE@79..80 "\n"
+  ERROR@80..86
+    IDENT@80..81 "a"
+    AT@81..82 "@"
+    ERROR@82..83 "."
+    ERROR@83..84 "."
+    ERROR@84..85 "."
+    NEWLINE@85..86 "\n"
+  NEWLINE@86..87 "\n"
+  ERROR@87..93
+    IDENT@87..88 "a"
+    DOLLAR@88..89 "$"
+    ERROR@89..90 "."
+    ERROR@90..91 "."
+    INT@91..92 "1"
+    NEWLINE@92..93 "\n"
+  ERROR@93..99
+    IDENT@93..94 "a"
+    AT@94..95 "@"
+    ERROR@95..96 "."
+    ERROR@96..97 "."
+    INT@97..98 "1"
+    NEWLINE@98..99 "\n"
+  NEWLINE@99..100 "\n"
+  ERROR@100..107
+    IDENT@100..101 "a"
+    DOLLAR@101..102 "$"
+    ERROR@102..103 "."
+    ERROR@103..104 "."
+    INT@104..106 "10"
+    NEWLINE@106..107 "\n"
+  ERROR@107..114
+    IDENT@107..108 "a"
+    AT@108..109 "@"
+    ERROR@109..110 "."
+    ERROR@110..111 "."
+    INT@111..113 "10"
+    NEWLINE@113..114 "\n"

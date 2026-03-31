@@ -1,0 +1,7 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..21
+  STRING@0..19 "\"multiline\r\nstring\""
+  NEWLINE@19..21 "\r\n"

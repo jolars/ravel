@@ -1,0 +1,183 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..183
+  BINARY_EXPR@0..4
+    IDENT@0..1 "a"
+    COLON2@1..3 "::"
+    IDENT@3..4 "b"
+  NEWLINE@4..5 "\n"
+  BINARY_EXPR@5..10
+    IDENT@5..6 "a"
+    COLON3@6..9 ":::"
+    IDENT@9..10 "b"
+  NEWLINE@10..11 "\n"
+  NEWLINE@11..12 "\n"
+  ERROR@12..19
+    IDENT@12..13 "a"
+    COLON2@13..15 "::"
+    ERROR@15..16 "`"
+    IDENT@16..17 "b"
+    ERROR@17..18 "`"
+    NEWLINE@18..19 "\n"
+  ERROR@19..27
+    IDENT@19..20 "a"
+    COLON3@20..23 ":::"
+    ERROR@23..24 "`"
+    IDENT@24..25 "b"
+    ERROR@25..26 "`"
+    NEWLINE@26..27 "\n"
+  NEWLINE@27..28 "\n"
+  BINARY_EXPR@28..34
+    IDENT@28..29 "a"
+    COLON2@29..31 "::"
+    STRING@31..34 "\"b\""
+  NEWLINE@34..35 "\n"
+  BINARY_EXPR@35..42
+    IDENT@35..36 "a"
+    COLON3@36..39 ":::"
+    STRING@39..42 "\"b\""
+  NEWLINE@42..43 "\n"
+  NEWLINE@43..44 "\n"
+  BINARY_EXPR@44..50
+    IDENT@44..45 "a"
+    COLON2@45..47 "::"
+    CALL_EXPR@47..50
+      IDENT@47..48 "b"
+      LPAREN@48..49 "("
+      ARG_LIST@49..49
+      RPAREN@49..50 ")"
+  NEWLINE@50..51 "\n"
+  BINARY_EXPR@51..58
+    IDENT@51..52 "a"
+    COLON3@52..55 ":::"
+    CALL_EXPR@55..58
+      IDENT@55..56 "b"
+      LPAREN@56..57 "("
+      ARG_LIST@57..57
+      RPAREN@57..58 ")"
+  NEWLINE@58..59 "\n"
+  NEWLINE@59..60 "\n"
+  BINARY_EXPR@60..68
+    BINARY_EXPR@60..64
+      IDENT@60..61 "a"
+      COLON2@61..63 "::"
+      IDENT@63..64 "b"
+    DOLLAR@64..65 "$"
+    CALL_EXPR@65..68
+      IDENT@65..66 "c"
+      LPAREN@66..67 "("
+      ARG_LIST@67..67
+      RPAREN@67..68 ")"
+  NEWLINE@68..69 "\n"
+  BINARY_EXPR@69..78
+    BINARY_EXPR@69..74
+      IDENT@69..70 "a"
+      COLON3@70..73 ":::"
+      IDENT@73..74 "b"
+    AT@74..75 "@"
+    CALL_EXPR@75..78
+      IDENT@75..76 "c"
+      LPAREN@76..77 "("
+      ARG_LIST@77..77
+      RPAREN@77..78 ")"
+  NEWLINE@78..79 "\n"
+  NEWLINE@79..80 "\n"
+  ERROR@80..87
+    IDENT@80..81 "a"
+    COLON2@81..83 "::"
+    ERROR@83..84 "."
+    ERROR@84..85 "."
+    ERROR@85..86 "."
+    NEWLINE@86..87 "\n"
+  ERROR@87..95
+    IDENT@87..88 "a"
+    COLON3@88..91 ":::"
+    ERROR@91..92 "."
+    ERROR@92..93 "."
+    ERROR@93..94 "."
+    NEWLINE@94..95 "\n"
+  NEWLINE@95..96 "\n"
+  ERROR@96..97 "."
+  ERROR@97..98 "."
+  ERROR@98..99 "."
+  ERROR@99..103
+    COLON2@99..101 "::"
+    IDENT@101..102 "a"
+    NEWLINE@102..103 "\n"
+  ERROR@103..104 "."
+  ERROR@104..105 "."
+  ERROR@105..106 "."
+  ERROR@106..111
+    COLON3@106..109 ":::"
+    IDENT@109..110 "a"
+    NEWLINE@110..111 "\n"
+  NEWLINE@111..112 "\n"
+  ERROR@112..113 "."
+  ERROR@113..114 "."
+  ERROR@114..115 "."
+  ERROR@115..121
+    COLON2@115..117 "::"
+    ERROR@117..118 "."
+    ERROR@118..119 "."
+    ERROR@119..120 "."
+    NEWLINE@120..121 "\n"
+  ERROR@121..122 "."
+  ERROR@122..123 "."
+  ERROR@123..124 "."
+  ERROR@124..131
+    COLON3@124..127 ":::"
+    ERROR@127..128 "."
+    ERROR@128..129 "."
+    ERROR@129..130 "."
+    NEWLINE@130..131 "\n"
+  NEWLINE@131..132 "\n"
+  ERROR@132..139
+    IDENT@132..133 "a"
+    COLON2@133..135 "::"
+    ERROR@135..136 "."
+    ERROR@136..137 "."
+    INT@137..138 "1"
+    NEWLINE@138..139 "\n"
+  ERROR@139..147
+    IDENT@139..140 "a"
+    COLON3@140..143 ":::"
+    ERROR@143..144 "."
+    ERROR@144..145 "."
+    INT@145..146 "1"
+    NEWLINE@146..147 "\n"
+  NEWLINE@147..148 "\n"
+  ERROR@148..149 "."
+  ERROR@149..150 "."
+  BINARY_EXPR@150..154
+    INT@150..151 "1"
+    COLON2@151..153 "::"
+    IDENT@153..154 "a"
+  NEWLINE@154..155 "\n"
+  ERROR@155..156 "."
+  ERROR@156..157 "."
+  BINARY_EXPR@157..162
+    INT@157..158 "1"
+    COLON3@158..161 ":::"
+    IDENT@161..162 "a"
+  NEWLINE@162..163 "\n"
+  NEWLINE@163..164 "\n"
+  ERROR@164..165 "."
+  ERROR@165..166 "."
+  ERROR@166..173
+    INT@166..167 "1"
+    COLON2@167..169 "::"
+    ERROR@169..170 "."
+    ERROR@170..171 "."
+    INT@171..172 "1"
+    NEWLINE@172..173 "\n"
+  ERROR@173..174 "."
+  ERROR@174..175 "."
+  ERROR@175..183
+    INT@175..176 "1"
+    COLON3@176..179 ":::"
+    ERROR@179..180 "."
+    ERROR@180..181 "."
+    INT@181..182 "1"
+    NEWLINE@182..183 "\n"

@@ -1,0 +1,341 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..344
+  IDENT@0..2 "fn"
+  NEWLINE@2..3 "\n"
+  SUBSET_EXPR@3..8
+    IDENT@3..5 "fn"
+    LBRACK@5..6 "["
+    ARG_LIST@6..7
+      ARG@6..7
+        IDENT@6..7 "a"
+    RBRACK@7..8 "]"
+  NEWLINE@8..9 "\n"
+  SUBSET_EXPR@9..17
+    IDENT@9..11 "fn"
+    LBRACK@11..12 "["
+    ARG_LIST@12..16
+      ARG@12..13
+        IDENT@12..13 "a"
+      COMMA@13..14 ","
+      WHITESPACE@14..15 " "
+      ARG@15..16
+        IDENT@15..16 "b"
+    RBRACK@16..17 "]"
+  NEWLINE@17..18 "\n"
+  SUBSET_EXPR@18..25
+    IDENT@18..20 "fn"
+    LBRACK@20..21 "["
+    ARG_LIST@21..24
+      ARG@21..22
+        ERROR@21..22 "."
+      ARG@22..23
+        ERROR@22..23 "."
+      ARG@23..24
+        ERROR@23..24 "."
+    RBRACK@24..25 "]"
+  NEWLINE@25..26 "\n"
+  SUBSET_EXPR@26..39
+    IDENT@26..28 "fn"
+    LBRACK@28..29 "["
+    ARG_LIST@29..38
+      ARG@29..30
+        IDENT@29..30 "a"
+      COMMA@30..31 ","
+      WHITESPACE@31..32 " "
+      ARG@32..33
+        ERROR@32..33 "."
+      ARG@33..34
+        ERROR@33..34 "."
+      ARG@34..35
+        ERROR@34..35 "."
+      COMMA@35..36 ","
+      WHITESPACE@36..37 " "
+      ARG@37..38
+        IDENT@37..38 "b"
+    RBRACK@38..39 "]"
+  NEWLINE@39..40 "\n"
+  NEWLINE@40..41 "\n"
+  SUBSET_EXPR@41..50
+    IDENT@41..43 "fn"
+    LBRACK@43..44 "["
+    ARG_LIST@44..49
+      ARG@44..49
+        ASSIGNMENT_EXPR@44..49
+          IDENT@44..45 "a"
+          WHITESPACE@45..46 " "
+          ASSIGN_EQ@46..47 "="
+          WHITESPACE@47..48 " "
+          INT@48..49 "1"
+    RBRACK@49..50 "]"
+  NEWLINE@50..51 "\n"
+  SUBSET_EXPR@51..344
+    IDENT@51..53 "fn"
+    LBRACK@53..54 "["
+    ARG_LIST@54..344
+      ARG@54..60
+        ERROR@54..60
+          IDENT@54..55 "a"
+          WHITESPACE@55..56 " "
+          ASSIGN_EQ@56..57 "="
+          WHITESPACE@57..58 " "
+          RBRACK@58..59 "]"
+          NEWLINE@59..60 "\n"
+      NEWLINE@60..61 "\n"
+      ARG@61..77
+        SUBSET_EXPR@61..77
+          IDENT@61..63 "fn"
+          LBRACK@63..64 "["
+          ARG_LIST@64..76
+            ARG@64..69
+              ASSIGNMENT_EXPR@64..69
+                IDENT@64..65 "a"
+                WHITESPACE@65..66 " "
+                ASSIGN_EQ@66..67 "="
+                WHITESPACE@67..68 " "
+                INT@68..69 "1"
+            COMMA@69..70 ","
+            WHITESPACE@70..71 " "
+            ARG@71..76
+              ASSIGNMENT_EXPR@71..76
+                IDENT@71..72 "b"
+                WHITESPACE@72..73 " "
+                ASSIGN_EQ@73..74 "="
+                WHITESPACE@74..75 " "
+                INT@75..76 "2"
+          RBRACK@76..77 "]"
+      NEWLINE@77..78 "\n"
+      ARG@78..344
+        SUBSET_EXPR@78..344
+          IDENT@78..80 "fn"
+          LBRACK@80..81 "["
+          ARG_LIST@81..344
+            ARG@81..94
+              ASSIGNMENT_EXPR@81..94
+                IDENT@81..82 "a"
+                WHITESPACE@82..83 " "
+                ASSIGN_EQ@83..84 "="
+                WHITESPACE@84..85 " "
+                ERROR@85..94
+                  COMMA@85..86 ","
+                  WHITESPACE@86..87 " "
+                  IDENT@87..88 "b"
+                  WHITESPACE@88..89 " "
+                  ASSIGN_EQ@89..90 "="
+                  WHITESPACE@90..91 " "
+                  INT@91..92 "2"
+                  RBRACK@92..93 "]"
+                  NEWLINE@93..94 "\n"
+            NEWLINE@94..95 "\n"
+            ARG@95..344
+              SUBSET_EXPR@95..344
+                IDENT@95..97 "fn"
+                LBRACK@97..98 "["
+                ARG_LIST@98..344
+                  ARG@98..99
+                    ERROR@98..99 "."
+                  ARG@99..100
+                    ERROR@99..100 "."
+                  ARG@100..101
+                    ERROR@100..101 "."
+                  WHITESPACE@101..102 " "
+                  ARG@102..107
+                    ERROR@102..107
+                      ASSIGN_EQ@102..103 "="
+                      WHITESPACE@103..104 " "
+                      INT@104..105 "1"
+                      RBRACK@105..106 "]"
+                      NEWLINE@106..107 "\n"
+                  ARG@107..344
+                    SUBSET_EXPR@107..344
+                      IDENT@107..109 "fn"
+                      LBRACK@109..110 "["
+                      ARG_LIST@110..344
+                        ARG@110..111
+                          ERROR@110..111 "."
+                        ARG@111..112
+                          ERROR@111..112 "."
+                        ARG@112..113
+                          ERROR@112..113 "."
+                        WHITESPACE@113..114 " "
+                        ARG@114..117
+                          ERROR@114..117
+                            ASSIGN_EQ@114..115 "="
+                            RBRACK@115..116 "]"
+                            NEWLINE@116..117 "\n"
+                        NEWLINE@117..118 "\n"
+                        ARG@118..131
+                          SUBSET_EXPR@118..131
+                            IDENT@118..120 "fn"
+                            LBRACK@120..121 "["
+                            ARG_LIST@121..130
+                              ARG@121..130
+                                ASSIGNMENT_EXPR@121..130
+                                  STRING@121..126 "\"arg\""
+                                  WHITESPACE@126..127 " "
+                                  ASSIGN_EQ@127..128 "="
+                                  WHITESPACE@128..129 " "
+                                  INT@129..130 "1"
+                            RBRACK@130..131 "]"
+                        NEWLINE@131..132 "\n"
+                        ARG@132..344
+                          SUBSET_EXPR@132..344
+                            IDENT@132..134 "fn"
+                            LBRACK@134..135 "["
+                            ARG_LIST@135..344
+                              ARG@135..144
+                                ERROR@135..144
+                                  STRING@135..140 "\"arg\""
+                                  WHITESPACE@140..141 " "
+                                  ASSIGN_EQ@141..142 "="
+                                  RBRACK@142..143 "]"
+                                  NEWLINE@143..144 "\n"
+                              NEWLINE@144..145 "\n"
+                              ARG@145..158
+                                COMMENT@145..158 "# Comma tests"
+                              NEWLINE@158..159 "\n"
+                              ARG@159..164
+                                SUBSET_EXPR@159..164
+                                  IDENT@159..161 "fn"
+                                  LBRACK@161..162 "["
+                                  ARG_LIST@162..163
+                                    ARG@162..162
+                                    COMMA@162..163 ","
+                                  RBRACK@163..164 "]"
+                              NEWLINE@164..165 "\n"
+                              ARG@165..172
+                                SUBSET_EXPR@165..172
+                                  IDENT@165..167 "fn"
+                                  LBRACK@167..168 "["
+                                  ARG_LIST@168..171
+                                    ARG@168..168
+                                    COMMA@168..169 ","
+                                    ARG@169..169
+                                    COMMA@169..170 ","
+                                    ARG@170..170
+                                    COMMA@170..171 ","
+                                  RBRACK@171..172 "]"
+                              NEWLINE@172..173 "\n"
+                              ARG@173..185
+                                SUBSET_EXPR@173..185
+                                  IDENT@173..175 "fn"
+                                  LBRACK@175..176 "["
+                                  ARG_LIST@176..184
+                                    ARG@176..176
+                                    COMMA@176..177 ","
+                                    ARG@177..177
+                                    COMMA@177..178 ","
+                                    ARG@178..179
+                                      IDENT@178..179 "a"
+                                    COMMA@179..180 ","
+                                    ARG@180..180
+                                    COMMA@180..181 ","
+                                    ARG@181..182
+                                      IDENT@181..182 "b"
+                                    COMMA@182..183 ","
+                                    ARG@183..183
+                                    COMMA@183..184 ","
+                                  RBRACK@184..185 "]"
+                              NEWLINE@185..186 "\n"
+                              NEWLINE@186..187 "\n"
+                              ARG@187..202
+                                COMMENT@187..202 "# Comment tests"
+                              NEWLINE@202..203 "\n"
+                              ARG@203..220
+                                SUBSET_EXPR@203..220
+                                  IDENT@203..205 "fn"
+                                  LBRACK@205..206 "["
+                                  ARG_LIST@206..219
+                                    NEWLINE@206..207 "\n"
+                                    WHITESPACE@207..209 "  "
+                                    ARG@209..218
+                                      COMMENT@209..218 "# comment"
+                                    NEWLINE@218..219 "\n"
+                                  RBRACK@219..220 "]"
+                              NEWLINE@220..221 "\n"
+                              ARG@221..240
+                                SUBSET_EXPR@221..240
+                                  IDENT@221..223 "fn"
+                                  LBRACK@223..224 "["
+                                  ARG_LIST@224..239
+                                    ARG@224..224
+                                    COMMA@224..225 ","
+                                    NEWLINE@225..226 "\n"
+                                    WHITESPACE@226..228 "  "
+                                    ARG@228..237
+                                      COMMENT@228..237 "# comment"
+                                    NEWLINE@237..238 "\n"
+                                    COMMA@238..239 ","
+                                  RBRACK@239..240 "]"
+                              NEWLINE@240..241 "\n"
+                              ARG@241..277
+                                SUBSET_EXPR@241..277
+                                  IDENT@241..243 "fn"
+                                  LBRACK@243..244 "["
+                                  ARG_LIST@244..276
+                                    NEWLINE@244..245 "\n"
+                                    WHITESPACE@245..247 "  "
+                                    ARG@247..248
+                                      IDENT@247..248 "a"
+                                    COMMA@248..249 ","
+                                    WHITESPACE@249..250 " "
+                                    ARG@250..260
+                                      COMMENT@250..260 "# comment1"
+                                    NEWLINE@260..261 "\n"
+                                    WHITESPACE@261..263 "  "
+                                    ARG@263..264
+                                      IDENT@263..264 "b"
+                                    WHITESPACE@264..265 " "
+                                    ARG@265..275
+                                      COMMENT@265..275 "# comment2"
+                                    NEWLINE@275..276 "\n"
+                                  RBRACK@276..277 "]"
+                              NEWLINE@277..278 "\n"
+                              ARG@278..328
+                                SUBSET_EXPR@278..328
+                                  IDENT@278..280 "fn"
+                                  LBRACK@280..281 "["
+                                  ARG_LIST@281..327
+                                    NEWLINE@281..282 "\n"
+                                    WHITESPACE@282..284 "  "
+                                    ARG@284..285
+                                      IDENT@284..285 "a"
+                                    WHITESPACE@285..286 " "
+                                    ARG@286..311
+                                      ASSIGNMENT_EXPR@286..311
+                                        COMMENT@286..296 "# comment1"
+                                        NEWLINE@296..297 "\n"
+                                        WHITESPACE@297..299 "  "
+                                        ASSIGN_EQ@299..300 "="
+                                        WHITESPACE@300..301 " "
+                                        COMMENT@301..311 "# comment2"
+                                    NEWLINE@311..312 "\n"
+                                    WHITESPACE@312..314 "  "
+                                    ARG@314..315
+                                      INT@314..315 "1"
+                                    WHITESPACE@315..316 " "
+                                    ARG@316..326
+                                      COMMENT@316..326 "# comment3"
+                                    NEWLINE@326..327 "\n"
+                                  RBRACK@327..328 "]"
+                              NEWLINE@328..329 "\n"
+                              NEWLINE@329..330 "\n"
+                              ARG@330..343
+                                SUBSET_EXPR@330..343
+                                  BLOCK_EXPR@330..336
+                                    LBRACE@330..331 "{"
+                                    IDENT@331..335 "expr"
+                                    RBRACE@335..336 "}"
+                                  LBRACK@336..337 "["
+                                  ARG_LIST@337..342
+                                    ARG@337..342
+                                      ASSIGNMENT_EXPR@337..342
+                                        IDENT@337..338 "a"
+                                        WHITESPACE@338..339 " "
+                                        ASSIGN_EQ@339..340 "="
+                                        WHITESPACE@340..341 " "
+                                        INT@341..342 "1"
+                                  RBRACK@342..343 "]"
+                              NEWLINE@343..344 "\n"

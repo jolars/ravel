@@ -1,0 +1,11 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected ',' between arguments",
+        start: 65,
+        end: 66,
+    },
+]
