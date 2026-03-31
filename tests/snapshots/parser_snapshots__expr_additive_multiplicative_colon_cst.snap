@@ -1,0 +1,59 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..48
+  BINARY_EXPR@0..9
+    BINARY_EXPR@0..5
+      IDENT@0..1 "x"
+      WHITESPACE@1..2 " "
+      MINUS@2..3 "-"
+      WHITESPACE@3..4 " "
+      IDENT@4..5 "y"
+    WHITESPACE@5..6 " "
+    PLUS@6..7 "+"
+    WHITESPACE@7..8 " "
+    IDENT@8..9 "z"
+  NEWLINE@9..10 "\n"
+  BINARY_EXPR@10..19
+    BINARY_EXPR@10..15
+      IDENT@10..11 "x"
+      WHITESPACE@11..12 " "
+      STAR@12..13 "*"
+      WHITESPACE@13..14 " "
+      IDENT@14..15 "y"
+    WHITESPACE@15..16 " "
+    SLASH@16..17 "/"
+    WHITESPACE@17..18 " "
+    IDENT@18..19 "z"
+  NEWLINE@19..20 "\n"
+  BINARY_EXPR@20..28
+    BINARY_EXPR@20..24
+      INT@20..21 "1"
+      COLON@21..22 ":"
+      INT@22..24 "10"
+    WHITESPACE@24..25 " "
+    PLUS@25..26 "+"
+    WHITESPACE@26..27 " "
+    INT@27..28 "2"
+  NEWLINE@28..29 "\n"
+  BINARY_EXPR@29..38
+    IDENT@29..30 "x"
+    WHITESPACE@30..31 " "
+    PIPE@31..33 "|>"
+    WHITESPACE@33..34 " "
+    BINARY_EXPR@34..38
+      IDENT@34..35 "f"
+      COLON@35..36 ":"
+      INT@36..38 "10"
+  NEWLINE@38..39 "\n"
+  BINARY_EXPR@39..47
+    BINARY_EXPR@39..44
+      IDENT@39..40 "x"
+      WHITESPACE@40..41 " "
+      CARET@41..42 "^"
+      WHITESPACE@42..43 " "
+      INT@43..44 "2"
+    COLON@44..45 ":"
+    INT@45..47 "10"
+  NEWLINE@47..48 "\n"

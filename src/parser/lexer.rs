@@ -11,13 +11,21 @@ pub(crate) enum TokKind {
     WhileKw,
     FunctionKw,
     InKw,
+    Tilde,
     UserOp,
     LBrack2,
     RBrack2,
     Plus,
+    Minus,
     Star,
+    Slash,
     Caret,
     Pipe,
+    Colon,
+    Colon2,
+    Colon3,
+    Dollar,
+    At,
     Or,
     Or2,
     And,
@@ -99,6 +107,33 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     start,
                     end: i,
                 });
+            }
+            '~' => {
+                out.push(Token {
+                    kind: TokKind::Tilde,
+                    text: "~".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
+            '$' => {
+                out.push(Token {
+                    kind: TokKind::Dollar,
+                    text: "$".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
+            '@' => {
+                out.push(Token {
+                    kind: TokKind::At,
+                    text: "@".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
             }
             '+' => {
                 out.push(Token {
@@ -271,6 +306,28 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     continue;
                 }
 
+                if i + 2 < bytes.len() && &input[i..i + 3] == ":::" {
+                    out.push(Token {
+                        kind: TokKind::Colon3,
+                        text: ":::".to_string(),
+                        start: i,
+                        end: i + 3,
+                    });
+                    i += 3;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == "::" {
+                    out.push(Token {
+                        kind: TokKind::Colon2,
+                        text: "::".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
                 if i + 1 < bytes.len() && &input[i..i + 2] == "|>" {
                     out.push(Token {
                         kind: TokKind::Pipe,
@@ -323,6 +380,39 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                         end: i + 2,
                     });
                     i += 2;
+                    continue;
+                }
+
+                if c == '-' {
+                    out.push(Token {
+                        kind: TokKind::Minus,
+                        text: "-".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == '/' {
+                    out.push(Token {
+                        kind: TokKind::Slash,
+                        text: "/".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                    continue;
+                }
+
+                if c == ':' {
+                    out.push(Token {
+                        kind: TokKind::Colon,
+                        text: ":".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
                     continue;
                 }
 

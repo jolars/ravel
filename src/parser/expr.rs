@@ -197,13 +197,16 @@ fn parse_prefix(
         }
         TokKind::LBrace => parse_block_expr(tokens, i, diagnostics),
         TokKind::Plus
+        | TokKind::Minus
         | TokKind::Star
+        | TokKind::Slash
         | TokKind::Caret
         | TokKind::AssignLeft
         | TokKind::SuperAssign
         | TokKind::AssignRight
         | TokKind::SuperAssignRight
         | TokKind::AssignEq
+        | TokKind::Colon
         | TokKind::Or
         | TokKind::Or2
         | TokKind::And
@@ -214,6 +217,11 @@ fn parse_prefix(
         | TokKind::LessThanOrEqual
         | TokKind::GreaterThan
         | TokKind::GreaterThanOrEqual
+        | TokKind::Tilde
+        | TokKind::Colon2
+        | TokKind::Colon3
+        | TokKind::Dollar
+        | TokKind::At
         | TokKind::Pipe => {
             push_token_diagnostic(diagnostics, "unexpected operator at expression start", tok);
             Some(error_expr_to_line_end(tokens, i, i + 1))
@@ -284,7 +292,7 @@ fn parse_block_expr(
 fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
     // Binding powers are aligned to AIR's operator precedence tiers:
     // LogicalOr (5), LogicalAnd (6), Relational (8), Additive (9),
-    // Multiplicative (10), Special (11), Exponential (14).
+    // Multiplicative (10), Special (11), Colon (12), Tilde (4), Exponential (14).
     match kind {
         TokKind::Or | TokKind::Or2 => Some((50, 51)),
         TokKind::And | TokKind::And2 => Some((60, 61)),
@@ -294,9 +302,11 @@ fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
         | TokKind::LessThanOrEqual
         | TokKind::GreaterThan
         | TokKind::GreaterThanOrEqual => Some((80, 81)),
-        TokKind::Plus => Some((90, 91)),
-        TokKind::Star => Some((100, 101)),
-        TokKind::Pipe => Some((110, 111)),
+        TokKind::Plus | TokKind::Minus => Some((90, 91)),
+        TokKind::Star | TokKind::Slash => Some((100, 101)),
+        TokKind::Pipe | TokKind::UserOp => Some((110, 111)),
+        TokKind::Colon => Some((120, 121)),
+        TokKind::Tilde => Some((40, 41)),
         TokKind::Caret => Some((140, 140)),
         _ => None,
     }

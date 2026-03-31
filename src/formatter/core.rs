@@ -67,7 +67,14 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
         let kind = token.kind();
         if matches!(
             kind,
-            SyntaxKind::USER_OP | SyntaxKind::LBRACK2 | SyntaxKind::RBRACK2 | SyntaxKind::ERROR
+            SyntaxKind::USER_OP
+                | SyntaxKind::LBRACK2
+                | SyntaxKind::RBRACK2
+                | SyntaxKind::COLON2
+                | SyntaxKind::COLON3
+                | SyntaxKind::DOLLAR
+                | SyntaxKind::AT
+                | SyntaxKind::ERROR
         ) {
             return Err(FormatError::UnsupportedConstruct {
                 kind,
@@ -211,9 +218,12 @@ fn format_binary_expr(node: &SyntaxNode, indent: usize) -> Result<String, Format
                     if matches!(
                         tok.kind(),
                         SyntaxKind::PLUS
+                            | SyntaxKind::MINUS
                             | SyntaxKind::STAR
+                            | SyntaxKind::SLASH
                             | SyntaxKind::CARET
                             | SyntaxKind::PIPE
+                            | SyntaxKind::COLON
                             | SyntaxKind::OR
                             | SyntaxKind::OR2
                             | SyntaxKind::AND
@@ -224,6 +234,8 @@ fn format_binary_expr(node: &SyntaxNode, indent: usize) -> Result<String, Format
                             | SyntaxKind::LESS_THAN_OR_EQUAL
                             | SyntaxKind::GREATER_THAN
                             | SyntaxKind::GREATER_THAN_OR_EQUAL
+                            | SyntaxKind::TILDE
+                            | SyntaxKind::USER_OP
                     )
             )
         })

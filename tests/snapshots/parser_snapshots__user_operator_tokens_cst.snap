@@ -3,9 +3,10 @@ source: tests/parser_snapshots.rs
 expression: tree
 ---
 ROOT@0..10
-  IDENT@0..1 "x"
-  WHITESPACE@1..2 " "
-  USER_OP@2..7 "%foo%"
-  WHITESPACE@7..8 " "
-  IDENT@8..9 "y"
+  BINARY_EXPR@0..9
+    IDENT@0..1 "x"
+    WHITESPACE@1..2 " "
+    USER_OP@2..7 "%foo%"
+    WHITESPACE@7..8 " "
+    IDENT@8..9 "y"
   NEWLINE@9..10 "\n"

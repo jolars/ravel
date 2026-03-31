@@ -1,0 +1,31 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..31
+  BINARY_EXPR@0..5
+    IDENT@0..1 "x"
+    WHITESPACE@1..2 " "
+    TILDE@2..3 "~"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "y"
+  NEWLINE@5..6 "\n"
+  BINARY_EXPR@6..15
+    IDENT@6..7 "x"
+    WHITESPACE@7..8 " "
+    USER_OP@8..13 "%foo%"
+    WHITESPACE@13..14 " "
+    IDENT@14..15 "y"
+  NEWLINE@15..16 "\n"
+  BINARY_EXPR@16..30
+    BINARY_EXPR@16..25
+      IDENT@16..17 "x"
+      WHITESPACE@17..18 " "
+      USER_OP@18..23 "%foo%"
+      WHITESPACE@23..24 " "
+      IDENT@24..25 "y"
+    WHITESPACE@25..26 " "
+    PIPE@26..28 "|>"
+    WHITESPACE@28..29 " "
+    IDENT@29..30 "f"
+  NEWLINE@30..31 "\n"
