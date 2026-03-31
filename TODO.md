@@ -108,9 +108,9 @@ easy -> medium -> hard.
 - [x] `ok/crlf/multiline_string_value.R` (medium)
 
 - [x] `ok/keyword.R` (hard)
-- [ ] `ok/repeat_statement.R` (hard)
-- [ ] `ok/dots.R` (hard)
-- [ ] `ok/dot_dot_i.R` (hard)
+- [x] `ok/repeat_statement.R` (hard)
+- [x] `ok/dots.R` (hard)
+- [x] `ok/dot_dot_i.R` (hard)
 - [ ] `ok/value/complex_value.R` (hard)
 
 ### AIR `error` cases (7)

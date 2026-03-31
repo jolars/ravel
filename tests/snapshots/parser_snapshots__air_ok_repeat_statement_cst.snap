@@ -1,0 +1,36 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..41
+  REPEAT_EXPR@0..8
+    REPEAT_KW@0..6 "repeat"
+    WHITESPACE@6..7 " "
+    INT@7..8 "1"
+  NEWLINE@8..9 "\n"
+  NEWLINE@9..10 "\n"
+  REPEAT_EXPR@10..20
+    REPEAT_KW@10..16 "repeat"
+    WHITESPACE@16..17 " "
+    BLOCK_EXPR@17..20
+      LBRACE@17..18 "{"
+      NEWLINE@18..19 "\n"
+      RBRACE@19..20 "}"
+  NEWLINE@20..21 "\n"
+  NEWLINE@21..22 "\n"
+  REPEAT_EXPR@22..40
+    REPEAT_KW@22..28 "repeat"
+    WHITESPACE@28..29 " "
+    BLOCK_EXPR@29..40
+      LBRACE@29..30 "{"
+      NEWLINE@30..31 "\n"
+      WHITESPACE@31..33 "  "
+      BINARY_EXPR@33..38
+        INT@33..34 "1"
+        WHITESPACE@34..35 " "
+        PLUS@35..36 "+"
+        WHITESPACE@36..37 " "
+        INT@37..38 "1"
+      NEWLINE@38..39 "\n"
+      RBRACE@39..40 "}"
+  NEWLINE@40..41 "\n"

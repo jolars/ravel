@@ -4,26 +4,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
 ---
 [
     ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 27,
-        end: 28,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 28,
-        end: 29,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 40,
-        end: 41,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 41,
-        end: 42,
-    },
-    ParseDiagnostic {
         message: "expected assignment right-hand side",
         start: 67,
         end: 68,
@@ -50,46 +30,11 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",
-        start: 116,
-        end: 117,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 117,
-        end: 118,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 119,
-        end: 120,
-    },
-    ParseDiagnostic {
-        message: "unexpected operator at expression start",
-        start: 119,
-        end: 120,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
         start: 125,
         end: 127,
     },
     ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 130,
-        end: 131,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 131,
-        end: 132,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 133,
-        end: 134,
-    },
-    ParseDiagnostic {
-        message: "unexpected operator at expression start",
+        message: "expected assignment right-hand side",
         start: 133,
         end: 134,
     },
@@ -192,11 +137,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         message: "expected closing bracket in subset expression",
         start: 127,
         end: 129,
-    },
-    ParseDiagnostic {
-        message: "expected closing bracket in subset expression",
-        start: 113,
-        end: 115,
     },
     ParseDiagnostic {
         message: "expected closing bracket in subset expression",

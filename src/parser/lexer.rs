@@ -9,6 +9,7 @@ pub(crate) enum TokKind {
     ElseKw,
     ForKw,
     WhileKw,
+    RepeatKw,
     FunctionKw,
     InKw,
     Tilde,
@@ -305,6 +306,40 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     });
                     i += 2;
                     continue;
+                }
+
+                if c == '.' {
+                    if i + 2 < bytes.len()
+                        && (bytes[i + 1] as char) == '.'
+                        && (bytes[i + 2] as char) == '.'
+                    {
+                        out.push(Token {
+                            kind: TokKind::Ident,
+                            text: "...".to_string(),
+                            start: i,
+                            end: i + 3,
+                        });
+                        i += 3;
+                        continue;
+                    }
+
+                    if i + 2 < bytes.len()
+                        && (bytes[i + 1] as char) == '.'
+                        && (bytes[i + 2] as char).is_ascii_digit()
+                    {
+                        let start = i;
+                        i += 3;
+                        while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                            i += 1;
+                        }
+                        out.push(Token {
+                            kind: TokKind::Ident,
+                            text: input[start..i].to_string(),
+                            start,
+                            end: i,
+                        });
+                        continue;
+                    }
                 }
 
                 if i + 1 < bytes.len() && &input[i..i + 2] == "==" {
@@ -739,6 +774,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                         "else" => TokKind::ElseKw,
                         "for" => TokKind::ForKw,
                         "while" => TokKind::WhileKw,
+                        "repeat" => TokKind::RepeatKw,
                         "function" => TokKind::FunctionKw,
                         "in" => TokKind::InKw,
                         _ => TokKind::Ident,
@@ -843,5 +879,21 @@ mod tests {
         assert_eq!(string_tokens[0].text, "r\"(hi)\"");
         assert_eq!(string_tokens[1].text, "r\"-(a)-\"");
         assert_eq!(string_tokens[2].text, "r\"(multi\nline)\"");
+    }
+
+    #[test]
+    fn lexes_dots_symbols_as_ident_tokens() {
+        let tokens = lex("... ..1 ..123");
+        let sig: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+        assert_eq!(sig.len(), 3);
+        assert_eq!(sig[0].kind, TokKind::Ident);
+        assert_eq!(sig[0].text, "...");
+        assert_eq!(sig[1].kind, TokKind::Ident);
+        assert_eq!(sig[1].text, "..1");
+        assert_eq!(sig[2].kind, TokKind::Ident);
+        assert_eq!(sig[2].text, "..123");
     }
 }

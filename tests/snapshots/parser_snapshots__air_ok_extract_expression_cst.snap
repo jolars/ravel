@@ -95,47 +95,35 @@ ROOT@0..114
       RPAREN@71..72 ")"
   NEWLINE@72..73 "\n"
   NEWLINE@73..74 "\n"
-  ERROR@74..80
+  BINARY_EXPR@74..79
     IDENT@74..75 "a"
     DOLLAR@75..76 "$"
-    ERROR@76..77 "."
-    ERROR@77..78 "."
-    ERROR@78..79 "."
-    NEWLINE@79..80 "\n"
-  ERROR@80..86
+    IDENT@76..79 "..."
+  NEWLINE@79..80 "\n"
+  BINARY_EXPR@80..85
     IDENT@80..81 "a"
     AT@81..82 "@"
-    ERROR@82..83 "."
-    ERROR@83..84 "."
-    ERROR@84..85 "."
-    NEWLINE@85..86 "\n"
+    IDENT@82..85 "..."
+  NEWLINE@85..86 "\n"
   NEWLINE@86..87 "\n"
-  ERROR@87..93
+  BINARY_EXPR@87..92
     IDENT@87..88 "a"
     DOLLAR@88..89 "$"
-    ERROR@89..90 "."
-    ERROR@90..91 "."
-    INT@91..92 "1"
-    NEWLINE@92..93 "\n"
-  ERROR@93..99
+    IDENT@89..92 "..1"
+  NEWLINE@92..93 "\n"
+  BINARY_EXPR@93..98
     IDENT@93..94 "a"
     AT@94..95 "@"
-    ERROR@95..96 "."
-    ERROR@96..97 "."
-    INT@97..98 "1"
-    NEWLINE@98..99 "\n"
+    IDENT@95..98 "..1"
+  NEWLINE@98..99 "\n"
   NEWLINE@99..100 "\n"
-  ERROR@100..107
+  BINARY_EXPR@100..106
     IDENT@100..101 "a"
     DOLLAR@101..102 "$"
-    ERROR@102..103 "."
-    ERROR@103..104 "."
-    INT@104..106 "10"
-    NEWLINE@106..107 "\n"
-  ERROR@107..114
+    IDENT@102..106 "..10"
+  NEWLINE@106..107 "\n"
+  BINARY_EXPR@107..113
     IDENT@107..108 "a"
     AT@108..109 "@"
-    ERROR@109..110 "."
-    ERROR@110..111 "."
-    INT@111..113 "10"
-    NEWLINE@113..114 "\n"
+    IDENT@109..113 "..10"
+  NEWLINE@113..114 "\n"

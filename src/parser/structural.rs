@@ -198,6 +198,40 @@ pub(crate) fn parse_while_expr(
     })
 }
 
+pub(crate) fn parse_repeat_expr(
+    tokens: &[Token],
+    start: usize,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    let repeat_tok = tokens.get(start)?;
+    let mut events = vec![Event::Start(SyntaxKind::REPEAT_EXPR), Event::Tok(start)];
+    let mut cursor = start + 1;
+
+    let body_start = skip_ws_and_newlines(tokens, cursor);
+    if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
+        push_range(&mut events, cursor, body_expr.start);
+        events.extend(body_expr.events);
+        cursor = body_expr.end;
+    } else {
+        push_token_diagnostic(
+            diagnostics,
+            "expected expression after 'repeat'",
+            repeat_tok,
+        );
+        let recovery = skip_ws_and_newlines(tokens, cursor);
+        push_range(&mut events, cursor, recovery);
+        push_empty_error_node(&mut events);
+        cursor = recovery;
+    }
+
+    events.push(Event::Finish);
+    Some(ExprParse {
+        start,
+        end: cursor,
+        events,
+    })
+}
+
 pub(crate) fn parse_for_expr(
     tokens: &[Token],
     start: usize,

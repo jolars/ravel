@@ -1,0 +1,26 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..79
+  COMMENT@0..30 "# Parses, but fails a ..."
+  NEWLINE@30..31 "\n"
+  IDENT@31..34 "..."
+  NEWLINE@34..35 "\n"
+  NEWLINE@35..36 "\n"
+  BLOCK_EXPR@36..43
+    LBRACE@36..37 "{"
+    WHITESPACE@37..38 " "
+    IDENT@38..41 "..."
+    WHITESPACE@41..42 " "
+    RBRACE@42..43 "}"
+  NEWLINE@43..44 "\n"
+  NEWLINE@44..45 "\n"
+  COMMENT@45..72 "# An actual base R fu ..."
+  NEWLINE@72..73 "\n"
+  CALL_EXPR@73..78
+    IDENT@73..76 "..."
+    LPAREN@76..77 "("
+    ARG_LIST@77..77
+    RPAREN@77..78 ")"
+  NEWLINE@78..79 "\n"

@@ -4,7 +4,7 @@ use crate::parser::events::{Event, ExprParse};
 use crate::parser::lexer::{TokKind, Token};
 use crate::parser::recovery::error_expr_to_line_end;
 use crate::parser::structural::{
-    parse_for_expr, parse_function_expr, parse_if_expr, parse_while_expr,
+    parse_for_expr, parse_function_expr, parse_if_expr, parse_repeat_expr, parse_while_expr,
 };
 use crate::syntax::SyntaxKind;
 
@@ -78,6 +78,12 @@ fn parse_expr_with_mode(
         Some(TokKind::WhileKw)
     ) {
         return parse_while_expr(tokens, start_non_ws, diagnostics);
+    }
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::RepeatKw)
+    ) {
+        return parse_repeat_expr(tokens, start_non_ws, diagnostics);
     }
     if matches!(
         tokens.get(start_non_ws).map(|t| &t.kind),
@@ -282,6 +288,7 @@ fn parse_prefix(
         | TokKind::ElseKw
         | TokKind::ForKw
         | TokKind::WhileKw
+        | TokKind::RepeatKw
         | TokKind::FunctionKw
         | TokKind::InKw
         | TokKind::LBrack
