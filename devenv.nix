@@ -11,6 +11,7 @@
     pkgs.cargo-llvm-cov
     pkgs.cargo-audit
     pkgs.cargo-deny
+    pkgs.cargo-insta
     pkgs.cmark
     pkgs.go-task
     pkgs.jarl

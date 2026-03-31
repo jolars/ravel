@@ -1,8 +1,59 @@
+use insta::assert_snapshot;
+use ravel::formatter::{FormatError, format};
+use ravel::parser::{parse, reconstruct};
 use std::io::Write;
 use std::process::{Command, Stdio};
-
-use ravel::formatter::{FormatError, format};
+use std::{fs, path::Path};
 use tempfile::tempdir;
+
+fn run_cli_no_stdin<const N: usize>(args: [&str; N]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_ravel"))
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("failed to run cli")
+}
+
+fn run_cli<const N: usize>(args: [&str; N], stdin_input: &str) -> std::process::Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_ravel"));
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().expect("failed to spawn ravel cli");
+    let mut stdin = child.stdin.take().expect("failed to open stdin");
+    stdin
+        .write_all(stdin_input.as_bytes())
+        .expect("failed to write stdin");
+    drop(stdin);
+
+    child.wait_with_output().expect("failed to wait for cli")
+}
+fn fixture_text(name: &str, file: &str) -> String {
+    let path = Path::new("tests")
+        .join("fixtures")
+        .join("formatter")
+        .join(name)
+        .join(file);
+    fs::read_to_string(&path).unwrap_or_else(|err| {
+        panic!("failed to read fixture {}: {err}", path.display());
+    })
+}
+
+fn fixture_names() -> &'static [&'static str] {
+    &[
+        "assignment_precedence",
+        "if_else_block",
+        "inline_comment",
+        "noop_assignment",
+        "noop_if_else_block",
+        "noop_comments",
+        "noop_unary",
+    ]
+}
 
 #[test]
 fn formats_assignment_binary_and_paren_stably() {
@@ -109,29 +160,59 @@ fn cli_format_check_disallows_verify() {
     assert!(stderr.contains("--verify cannot be combined with --check"));
 }
 
-fn run_cli<const N: usize>(args: [&str; N], stdin_input: &str) -> std::process::Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_ravel"));
-    cmd.args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+#[test]
+fn formatter_fixtures_match_expected_and_snapshots() {
+    for name in fixture_names() {
+        let input = fixture_text(name, "input.R");
+        let expected = fixture_text(name, "expected.R");
+        let formatted = format(&input).unwrap_or_else(|err| {
+            panic!("failed to format fixture {name}: {err}");
+        });
 
-    let mut child = cmd.spawn().expect("failed to spawn ravel cli");
-    let mut stdin = child.stdin.take().expect("failed to open stdin");
-    stdin
-        .write_all(stdin_input.as_bytes())
-        .expect("failed to write stdin");
-    drop(stdin);
-
-    child.wait_with_output().expect("failed to wait for cli")
+        assert_eq!(formatted, expected, "formatted output mismatch for {name}");
+        assert_snapshot!(format!("{name}_formatted"), formatted);
+    }
 }
 
-fn run_cli_no_stdin<const N: usize>(args: [&str; N]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ravel"))
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .expect("failed to run cli")
+#[test]
+fn parse_format_fixtures_are_stable_and_parseable() {
+    for name in fixture_names() {
+        let input = fixture_text(name, "input.R");
+        let expected = fixture_text(name, "expected.R");
+
+        let parsed_input = parse(&input);
+        assert!(
+            parsed_input.diagnostics.is_empty(),
+            "fixture {name} input should be parseable, got diagnostics: {:#?}",
+            parsed_input.diagnostics
+        );
+
+        let formatted = format(&input).unwrap_or_else(|err| {
+            panic!("failed to format fixture {name}: {err}");
+        });
+        assert_eq!(
+            formatted, expected,
+            "formatted output mismatch for integration fixture {name}"
+        );
+
+        let reparsed = parse(&formatted);
+        assert!(
+            reparsed.diagnostics.is_empty(),
+            "fixture {name} formatted output should be parseable, got diagnostics: {:#?}",
+            reparsed.diagnostics
+        );
+        assert_eq!(
+            reconstruct(&formatted),
+            formatted,
+            "fixture {name} formatted output should round-trip losslessly"
+        );
+
+        let reformatted = format(&formatted).unwrap_or_else(|err| {
+            panic!("failed to reformat fixture {name}: {err}");
+        });
+        assert_eq!(
+            reformatted, formatted,
+            "fixture {name} formatting should be idempotent"
+        );
+    }
 }
