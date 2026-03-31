@@ -26,6 +26,8 @@ pub(crate) enum TokKind {
     Colon3,
     Dollar,
     At,
+    Semicolon,
+    Comma,
     Or,
     Or2,
     And,
@@ -130,6 +132,24 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 out.push(Token {
                     kind: TokKind::At,
                     text: "@".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
+            ';' => {
+                out.push(Token {
+                    kind: TokKind::Semicolon,
+                    text: ";".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
+            ',' => {
+                out.push(Token {
+                    kind: TokKind::Comma,
+                    text: ",".to_string(),
                     start: i,
                     end: i + 1,
                 });

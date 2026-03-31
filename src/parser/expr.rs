@@ -268,6 +268,8 @@ fn parse_prefix(
         | TokKind::Colon3
         | TokKind::Dollar
         | TokKind::At
+        | TokKind::Semicolon
+        | TokKind::Comma
         | TokKind::Pipe => {
             push_token_diagnostic(diagnostics, "unexpected operator at expression start", tok);
             Some(error_expr_to_line_end(tokens, i, i + 1))

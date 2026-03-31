@@ -43,6 +43,8 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::Colon3 => SyntaxKind::COLON3,
         TokKind::Dollar => SyntaxKind::DOLLAR,
         TokKind::At => SyntaxKind::AT,
+        TokKind::Semicolon => SyntaxKind::SEMICOLON,
+        TokKind::Comma => SyntaxKind::COMMA,
         TokKind::Or => SyntaxKind::OR,
         TokKind::Or2 => SyntaxKind::OR2,
         TokKind::And => SyntaxKind::AND,
