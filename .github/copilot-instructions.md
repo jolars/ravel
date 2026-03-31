@@ -35,6 +35,10 @@ Taskfile equivalents:
 
 - CLI entrypoint is `src/main.rs`, which wires `ravel parse`, `ravel format`,
   and `ravel lint` to library modules in `src/`.
+- The repo ships a `devenv` setup (see `devenv.*`) and the Nix development
+  environment includes `R`.
+- The `air` tree-sitter-based parser is available locally for reference and
+  comparison; it is not exposed via this repo's CLI.
 - Parsing is built as a lossless `rowan` CST pipeline (lexer → event-based
   parser → CST) with reconstruction for round-trip checks (`src/parser/*`,
   `src/syntax.rs`).

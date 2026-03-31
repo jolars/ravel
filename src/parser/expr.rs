@@ -8,6 +8,17 @@ use crate::parser::structural::{
 };
 use crate::syntax::SyntaxKind;
 
+fn is_assignment_operator(kind: &TokKind) -> bool {
+    matches!(
+        kind,
+        TokKind::AssignLeft
+            | TokKind::SuperAssign
+            | TokKind::AssignRight
+            | TokKind::SuperAssignRight
+            | TokKind::AssignEq
+    )
+}
+
 pub(crate) fn parse_expr(
     tokens: &[Token],
     start: usize,
@@ -48,7 +59,7 @@ pub(crate) fn parse_expr(
             break;
         };
 
-        if op.kind == TokKind::AssignLeft {
+        if is_assignment_operator(&op.kind) {
             let (l_bp, r_bp) = (1, 1);
             if l_bp < min_bp {
                 break;
@@ -185,7 +196,15 @@ fn parse_prefix(
             })
         }
         TokKind::LBrace => parse_block_expr(tokens, i, diagnostics),
-        TokKind::Plus | TokKind::Star | TokKind::Caret | TokKind::AssignLeft => {
+        TokKind::Plus
+        | TokKind::Star
+        | TokKind::Caret
+        | TokKind::AssignLeft
+        | TokKind::SuperAssign
+        | TokKind::AssignRight
+        | TokKind::SuperAssignRight
+        | TokKind::AssignEq
+        | TokKind::Pipe => {
             push_token_diagnostic(diagnostics, "unexpected operator at expression start", tok);
             Some(error_expr_to_line_end(tokens, i, i + 1))
         }
@@ -253,10 +272,13 @@ fn parse_block_expr(
 }
 
 fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
+    // Binding powers are aligned to AIR's operator precedence tiers:
+    // Additive (9), Multiplicative (10), Special (11), Exponential (14).
     match kind {
-        TokKind::Plus => Some((10, 11)),
-        TokKind::Star => Some((20, 21)),
-        TokKind::Caret => Some((30, 30)),
+        TokKind::Plus => Some((90, 91)),
+        TokKind::Star => Some((100, 101)),
+        TokKind::Pipe => Some((110, 111)),
+        TokKind::Caret => Some((140, 140)),
         _ => None,
     }
 }

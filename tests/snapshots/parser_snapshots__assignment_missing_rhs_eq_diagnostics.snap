@@ -1,0 +1,11 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 2,
+        end: 3,
+    },
+]

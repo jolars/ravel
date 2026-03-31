@@ -17,11 +17,16 @@ pub(crate) enum TokKind {
     Plus,
     Star,
     Caret,
+    Pipe,
     LParen,
     RParen,
     LBrace,
     RBrace,
     AssignLeft,
+    SuperAssign,
+    AssignRight,
+    SuperAssignRight,
+    AssignEq,
     Whitespace,
     Newline,
     Unknown,
@@ -212,6 +217,39 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     continue;
                 }
 
+                if i + 1 < bytes.len() && &input[i..i + 2] == "|>" {
+                    out.push(Token {
+                        kind: TokKind::Pipe,
+                        text: "|>".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 2 < bytes.len() && &input[i..i + 3] == "<<-" {
+                    out.push(Token {
+                        kind: TokKind::SuperAssign,
+                        text: "<<-".to_string(),
+                        start: i,
+                        end: i + 3,
+                    });
+                    i += 3;
+                    continue;
+                }
+
+                if i + 2 < bytes.len() && &input[i..i + 3] == "->>" {
+                    out.push(Token {
+                        kind: TokKind::SuperAssignRight,
+                        text: "->>".to_string(),
+                        start: i,
+                        end: i + 3,
+                    });
+                    i += 3;
+                    continue;
+                }
+
                 if i + 1 < bytes.len() && &input[i..i + 2] == "<-" {
                     out.push(Token {
                         kind: TokKind::AssignLeft,
@@ -220,6 +258,28 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                         end: i + 2,
                     });
                     i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == "->" {
+                    out.push(Token {
+                        kind: TokKind::AssignRight,
+                        text: "->".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if c == '=' {
+                    out.push(Token {
+                        kind: TokKind::AssignEq,
+                        text: "=".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
                     continue;
                 }
 

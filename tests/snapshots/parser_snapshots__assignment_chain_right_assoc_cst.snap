@@ -1,0 +1,17 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..12
+  ASSIGNMENT_EXPR@0..11
+    IDENT@0..1 "a"
+    WHITESPACE@1..2 " "
+    ASSIGN_LEFT@2..4 "<-"
+    WHITESPACE@4..5 " "
+    ASSIGNMENT_EXPR@5..11
+      IDENT@5..6 "b"
+      WHITESPACE@6..7 " "
+      ASSIGN_LEFT@7..9 "<-"
+      WHITESPACE@9..10 " "
+      IDENT@10..11 "c"
+  NEWLINE@11..12 "\n"

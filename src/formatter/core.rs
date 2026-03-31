@@ -172,26 +172,48 @@ fn format_assignment_expr(node: &SyntaxNode, indent: usize) -> Result<String, Fo
     let elements: Vec<_> = node.children_with_tokens().collect();
     let op_idx = elements
         .iter()
-        .position(
-            |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_LEFT),
-        )
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(
+                        tok.kind(),
+                        SyntaxKind::ASSIGN_LEFT
+                            | SyntaxKind::SUPER_ASSIGN
+                            | SyntaxKind::ASSIGN_RIGHT
+                            | SyntaxKind::SUPER_ASSIGN_RIGHT
+                            | SyntaxKind::ASSIGN_EQ
+                    )
+            )
+        })
         .ok_or_else(|| FormatError::AmbiguousConstruct {
             context: "assignment operator not found",
             snippet: node.text().to_string(),
         })?;
 
+    let op = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => tok.text().to_string(),
+        NodeOrToken::Node(_) => unreachable!(),
+    };
     let lhs = format_expr_segment(&elements[..op_idx], "assignment lhs", indent)?;
     let rhs = format_expr_segment(&elements[op_idx + 1..], "assignment rhs", indent)?;
-    Ok(format!("{lhs} <- {rhs}"))
+    Ok(format!("{lhs} {op} {rhs}"))
 }
 
 fn format_binary_expr(node: &SyntaxNode, indent: usize) -> Result<String, FormatError> {
     let elements: Vec<_> = node.children_with_tokens().collect();
     let op_idx = elements
         .iter()
-        .position(
-            |el| matches!(el, NodeOrToken::Token(tok) if matches!(tok.kind(), SyntaxKind::PLUS | SyntaxKind::STAR | SyntaxKind::CARET)),
-        )
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(
+                        tok.kind(),
+                        SyntaxKind::PLUS | SyntaxKind::STAR | SyntaxKind::CARET | SyntaxKind::PIPE
+                    )
+            )
+        })
         .ok_or_else(|| FormatError::AmbiguousConstruct {
             context: "binary operator not found",
             snippet: node.text().to_string(),
