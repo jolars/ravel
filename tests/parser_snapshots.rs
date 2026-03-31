@@ -123,6 +123,7 @@ fn fixture_names() -> &'static [&'static str] {
         "air_ok_repeat_statement",
         "air_ok_dots",
         "air_ok_dot_dot_i",
+        "air_ok_value_complex_value",
         "air_error_call_side_by_side_arguments",
         "air_error_parenthesized_expression_empty",
         "air_error_parenthesized_expression_multiple",
