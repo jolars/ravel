@@ -1,5 +1,5 @@
-use crate::parser::cursor::{skip_ws, skip_ws_and_newlines};
-use crate::parser::diagnostics::{ParseDiagnostic, push_token_diagnostic};
+use crate::parser::context::{ParserCtx, push_token_diagnostic_ctx as push_token_diagnostic};
+use crate::parser::diagnostics::ParseDiagnostic;
 use crate::parser::events::{Event, ExprParse};
 use crate::parser::lexer::{TokKind, Token};
 use crate::parser::recovery::error_expr_to_line_end;
@@ -23,12 +23,12 @@ fn is_infix_operator(kind: &TokKind) -> bool {
     infix_binding_power(kind).is_some()
 }
 
-fn next_operator(tokens: &[Token], start: usize) -> Option<(usize, &Token)> {
-    let op_idx = skip_ws(tokens, start);
-    let op = tokens.get(op_idx)?;
+fn next_operator<'a>(ctx: &ParserCtx<'a>, start: usize) -> Option<(usize, &'a Token)> {
+    let op_idx = ctx.skip_ws(start);
+    let op = ctx.token(op_idx)?;
     if op.kind == TokKind::Newline {
-        let next_idx = skip_ws_and_newlines(tokens, start);
-        let next = tokens.get(next_idx)?;
+        let next_idx = ctx.skip_ws_and_newlines(start);
+        let next = ctx.token(next_idx)?;
         if is_assignment_operator(&next.kind) || is_infix_operator(&next.kind) {
             return Some((next_idx, next));
         }
@@ -56,10 +56,11 @@ fn parse_expr_with_mode(
     diagnostics: &mut Vec<ParseDiagnostic>,
     allow_newline_prefix: bool,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let start_non_ws = if allow_newline_prefix {
-        skip_ws_and_newlines(tokens, start)
+        ctx.skip_ws_and_newlines(start)
     } else {
-        skip_ws(tokens, start)
+        ctx.skip_ws(start)
     };
     if matches!(
         tokens.get(start_non_ws).map(|t| &t.kind),
@@ -92,12 +93,12 @@ fn parse_expr_with_mode(
         return parse_function_expr(tokens, start_non_ws, diagnostics);
     }
 
-    let mut lhs = parse_prefix(tokens, start, diagnostics, allow_newline_prefix)?;
+    let mut lhs = parse_prefix(&ctx, start, diagnostics, allow_newline_prefix)?;
 
     loop {
-        lhs = parse_postfix_chain(tokens, lhs, diagnostics);
+        lhs = parse_postfix_chain(&ctx, lhs, diagnostics);
 
-        let Some((op_idx, op)) = next_operator(tokens, lhs.end) else {
+        let Some((op_idx, op)) = next_operator(&ctx, lhs.end) else {
             break;
         };
 
@@ -182,7 +183,7 @@ fn parse_expr_with_mode(
         if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
             && matches!(expr_root_kind(&rhs), Some(SyntaxKind::IDENT))
         {
-            let rhs_tok_idx = skip_ws(tokens, rhs.start);
+            let rhs_tok_idx = ctx.skip_ws(rhs.start);
             if let Some(tok) = tokens.get(rhs_tok_idx)
                 && ident_is_special_constant(tok.text.as_str())
             {
@@ -211,15 +212,16 @@ fn parse_expr_with_mode(
 }
 
 fn parse_prefix(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
     allow_newline_prefix: bool,
 ) -> Option<ExprParse> {
+    let tokens = ctx.tokens();
     let i = if allow_newline_prefix {
-        skip_ws_and_newlines(tokens, start)
+        ctx.skip_ws_and_newlines(start)
     } else {
-        skip_ws(tokens, start)
+        ctx.skip_ws(start)
     };
     let tok = tokens.get(i)?;
 
@@ -268,7 +270,7 @@ fn parse_prefix(
                 push_token_diagnostic(diagnostics, "expected expression after '('", tok);
                 return Some(error_expr_to_line_end(tokens, i, inner_start));
             };
-            let close_idx = skip_ws_and_newlines(tokens, inner.end);
+            let close_idx = ctx.skip_ws_and_newlines(inner.end);
             if !matches!(
                 tokens.get(close_idx).map(|t| &t.kind),
                 Some(TokKind::RParen)
@@ -311,7 +313,7 @@ fn parse_prefix(
                 events,
             })
         }
-        TokKind::LBrace => parse_block_expr(tokens, i, diagnostics),
+        TokKind::LBrace => parse_block_expr(ctx, i, diagnostics),
         TokKind::Star
         | TokKind::Slash
         | TokKind::Caret
@@ -362,15 +364,16 @@ fn parse_prefix(
 }
 
 fn parse_block_expr(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let tokens = ctx.tokens();
     let mut i = start + 1;
     let mut events = vec![Event::Start(SyntaxKind::BLOCK_EXPR), Event::Tok(start)];
 
     loop {
-        let next = skip_ws(tokens, i);
+        let next = ctx.skip_ws(i);
         let Some(tok) = tokens.get(next) else {
             push_token_diagnostic(diagnostics, "expected '}' to close block", &tokens[start]);
             for idx in i..tokens.len() {
@@ -420,32 +423,33 @@ fn parse_block_expr(
 }
 
 fn parse_postfix_chain(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     mut lhs: ExprParse,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
+    let tokens = ctx.tokens();
     loop {
         // No newline is allowed between the callee and `(` — `f\n(x)` is two statements in R.
-        let after_lhs = skip_ws(tokens, lhs.end);
+        let after_lhs = ctx.skip_ws(lhs.end);
         if matches!(
             tokens.get(after_lhs).map(|t| &t.kind),
             Some(TokKind::LParen)
         ) {
-            lhs = parse_call_expr(tokens, lhs, after_lhs, diagnostics);
+            lhs = parse_call_expr(ctx, lhs, after_lhs, diagnostics);
             continue;
         }
         if matches!(
             tokens.get(after_lhs).map(|t| &t.kind),
             Some(TokKind::LBrack)
         ) {
-            lhs = parse_subset_expr(tokens, lhs, after_lhs, diagnostics);
+            lhs = parse_subset_expr(ctx, lhs, after_lhs, diagnostics);
             continue;
         }
         if matches!(
             tokens.get(after_lhs).map(|t| &t.kind),
             Some(TokKind::LBrack2)
         ) {
-            lhs = parse_subset2_expr(tokens, lhs, after_lhs, diagnostics);
+            lhs = parse_subset2_expr(ctx, lhs, after_lhs, diagnostics);
             continue;
         }
         break;
@@ -489,11 +493,12 @@ fn build_assignment_expr(lhs: ExprParse, op_idx: usize, rhs: ExprParse) -> ExprP
 
 /// Returns true if tokens starting at `i` match the pattern `ident =` (named argument),
 /// where `=` is not `==`.
-fn is_named_arg(tokens: &[Token], i: usize) -> bool {
+fn is_named_arg(ctx: &ParserCtx<'_>, i: usize) -> bool {
+    let tokens = ctx.tokens();
     if !matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Ident)) {
         return false;
     }
-    let next = skip_ws(tokens, i + 1);
+    let next = ctx.skip_ws(i + 1);
     matches!(tokens.get(next).map(|t| &t.kind), Some(TokKind::AssignEq))
 }
 
@@ -526,11 +531,12 @@ fn ident_is_special_constant(text: &str) -> bool {
 }
 
 fn parse_call_expr(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     callee: ExprParse,
     lparen_idx: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
+    let tokens = ctx.tokens();
     let mut events = vec![Event::Start(SyntaxKind::CALL_EXPR)];
     events.extend(callee.events);
     // Whitespace between callee end and `(`
@@ -545,7 +551,7 @@ fn parse_call_expr(
     let mut expect_delimiter = false;
     loop {
         // Skip whitespace and newlines within the argument list.
-        let next_i = skip_ws_and_newlines(tokens, i);
+        let next_i = ctx.skip_ws_and_newlines(i);
         let had_newline_gap = has_newline(tokens, i, next_i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
@@ -576,10 +582,10 @@ fn parse_call_expr(
 
         events.push(Event::Start(SyntaxKind::ARG));
 
-        if is_named_arg(tokens, i) {
+        if is_named_arg(ctx, i) {
             // Named argument: ident = expr
             events.push(Event::Tok(i)); // ident
-            let eq_idx = skip_ws(tokens, i + 1);
+            let eq_idx = ctx.skip_ws(i + 1);
             for idx in (i + 1)..eq_idx {
                 events.push(Event::Tok(idx));
             }
@@ -612,7 +618,7 @@ fn parse_call_expr(
         expect_delimiter = true;
 
         // Skip whitespace/newlines after arg, then consume optional comma.
-        let next_i = skip_ws_and_newlines(tokens, i);
+        let next_i = ctx.skip_ws_and_newlines(i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
         }
@@ -628,7 +634,7 @@ fn parse_call_expr(
     events.push(Event::Finish); // ARG_LIST
 
     // Closing paren (may have trailing whitespace/newlines before it).
-    let next_i = skip_ws_and_newlines(tokens, i);
+    let next_i = ctx.skip_ws_and_newlines(i);
     for idx in i..next_i {
         events.push(Event::Tok(idx));
     }
@@ -651,13 +657,13 @@ fn parse_call_expr(
 }
 
 fn parse_subset_expr(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     target: ExprParse,
     lbrack_idx: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
     parse_bracket_expr(
-        tokens,
+        ctx,
         target,
         lbrack_idx,
         TokKind::RBrack,
@@ -667,13 +673,13 @@ fn parse_subset_expr(
 }
 
 fn parse_subset2_expr(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     target: ExprParse,
     lbrack2_idx: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
     parse_bracket_expr(
-        tokens,
+        ctx,
         target,
         lbrack2_idx,
         TokKind::RBrack2,
@@ -683,13 +689,14 @@ fn parse_subset2_expr(
 }
 
 fn parse_bracket_expr(
-    tokens: &[Token],
+    ctx: &ParserCtx<'_>,
     target: ExprParse,
     open_idx: usize,
     close_kind: TokKind,
     node_kind: SyntaxKind,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
+    let tokens = ctx.tokens();
     let mut events = vec![Event::Start(node_kind)];
     events.extend(target.events);
     for idx in target.end..open_idx {
@@ -702,7 +709,7 @@ fn parse_bracket_expr(
 
     let mut expect_delimiter = false;
     loop {
-        let next_i = skip_ws_and_newlines(tokens, i);
+        let next_i = ctx.skip_ws_and_newlines(i);
         let had_newline_gap = has_newline(tokens, i, next_i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
@@ -745,7 +752,7 @@ fn parse_bracket_expr(
         events.push(Event::Finish);
         expect_delimiter = true;
 
-        let next_i = skip_ws_and_newlines(tokens, i);
+        let next_i = ctx.skip_ws_and_newlines(i);
         for idx in i..next_i {
             events.push(Event::Tok(idx));
         }
@@ -758,7 +765,7 @@ fn parse_bracket_expr(
     }
 
     events.push(Event::Finish); // ARG_LIST
-    let next_i = skip_ws_and_newlines(tokens, i);
+    let next_i = ctx.skip_ws_and_newlines(i);
     for idx in i..next_i {
         events.push(Event::Tok(idx));
     }

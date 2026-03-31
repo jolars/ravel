@@ -1,5 +1,6 @@
-use crate::parser::cursor::{find_function_body_recovery, skip_ws, skip_ws_and_newlines};
-use crate::parser::diagnostics::{ParseDiagnostic, push_token_diagnostic};
+use crate::parser::context::{ParserCtx, push_token_diagnostic_ctx as push_token_diagnostic};
+use crate::parser::cursor::find_function_body_recovery;
+use crate::parser::diagnostics::ParseDiagnostic;
 use crate::parser::events::{Event, ExprParse, push_range};
 use crate::parser::expr::parse_expr;
 use crate::parser::lexer::{TokKind, Token};
@@ -7,8 +8,9 @@ use crate::parser::recovery::push_empty_error_node;
 use crate::syntax::SyntaxKind;
 
 fn skip_for_clause_trivia(tokens: &[Token], mut i: usize) -> usize {
+    let ctx = ParserCtx::new(tokens);
     while matches!(
-        tokens.get(i).map(|t| &t.kind),
+        ctx.token(i).map(|t| &t.kind),
         Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
     ) {
         i += 1;
@@ -21,10 +23,11 @@ pub(crate) fn parse_if_expr(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let if_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::IF_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let mut cond_start = skip_ws_and_newlines(tokens, cursor);
+    let mut cond_start = ctx.skip_ws_and_newlines(cursor);
     let mut saw_lparen = false;
 
     if matches!(
@@ -57,7 +60,7 @@ pub(crate) fn parse_if_expr(
     }
 
     if saw_lparen {
-        let cond_rparen = skip_ws_and_newlines(tokens, cursor);
+        let cond_rparen = ctx.skip_ws_and_newlines(cursor);
         if matches!(
             tokens.get(cond_rparen).map(|t| &t.kind),
             Some(TokKind::RParen)
@@ -70,7 +73,7 @@ pub(crate) fn parse_if_expr(
         }
     }
 
-    let then_start = skip_ws_and_newlines(tokens, cursor);
+    let then_start = ctx.skip_ws_and_newlines(cursor);
     if let Some(then_expr) = parse_expr(tokens, then_start, 0, diagnostics) {
         push_range(&mut events, cursor, then_expr.start);
         events.extend(then_expr.events);
@@ -81,13 +84,13 @@ pub(crate) fn parse_if_expr(
             "expected expression after if condition",
             if_tok,
         );
-        let recovery = skip_ws_and_newlines(tokens, cursor);
+        let recovery = ctx.skip_ws_and_newlines(cursor);
         push_range(&mut events, cursor, recovery);
         push_empty_error_node(&mut events);
         cursor = recovery;
     }
 
-    let else_idx = skip_ws(tokens, cursor);
+    let else_idx = ctx.skip_ws(cursor);
     if matches!(tokens.get(else_idx).map(|t| &t.kind), Some(TokKind::ElseKw)) {
         push_range(&mut events, cursor, else_idx);
         events.push(Event::Tok(else_idx));
@@ -103,7 +106,7 @@ pub(crate) fn parse_if_expr(
                 "expected expression after 'else'",
                 &tokens[else_idx],
             );
-            let recovery = skip_ws(tokens, cursor);
+            let recovery = ctx.skip_ws(cursor);
             push_range(&mut events, cursor, recovery);
             push_empty_error_node(&mut events);
             cursor = recovery;
@@ -123,10 +126,11 @@ pub(crate) fn parse_while_expr(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let while_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::WHILE_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let mut cond_start = skip_ws_and_newlines(tokens, cursor);
+    let mut cond_start = ctx.skip_ws_and_newlines(cursor);
     let mut saw_lparen = false;
 
     if matches!(
@@ -159,7 +163,7 @@ pub(crate) fn parse_while_expr(
     }
 
     if saw_lparen {
-        let cond_rparen = skip_ws_and_newlines(tokens, cursor);
+        let cond_rparen = ctx.skip_ws_and_newlines(cursor);
         if matches!(
             tokens.get(cond_rparen).map(|t| &t.kind),
             Some(TokKind::RParen)
@@ -173,7 +177,7 @@ pub(crate) fn parse_while_expr(
         }
     }
 
-    let body_start = skip_ws_and_newlines(tokens, cursor);
+    let body_start = ctx.skip_ws_and_newlines(cursor);
     if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
         push_range(&mut events, cursor, body_expr.start);
         events.extend(body_expr.events);
@@ -184,7 +188,7 @@ pub(crate) fn parse_while_expr(
             "expected expression after while condition",
             while_tok,
         );
-        let recovery = skip_ws_and_newlines(tokens, cursor);
+        let recovery = ctx.skip_ws_and_newlines(cursor);
         push_range(&mut events, cursor, recovery);
         push_empty_error_node(&mut events);
         cursor = recovery;
@@ -203,11 +207,12 @@ pub(crate) fn parse_repeat_expr(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let repeat_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::REPEAT_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
 
-    let body_start = skip_ws_and_newlines(tokens, cursor);
+    let body_start = ctx.skip_ws_and_newlines(cursor);
     if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
         push_range(&mut events, cursor, body_expr.start);
         events.extend(body_expr.events);
@@ -218,7 +223,7 @@ pub(crate) fn parse_repeat_expr(
             "expected expression after 'repeat'",
             repeat_tok,
         );
-        let recovery = skip_ws_and_newlines(tokens, cursor);
+        let recovery = ctx.skip_ws_and_newlines(cursor);
         push_range(&mut events, cursor, recovery);
         push_empty_error_node(&mut events);
         cursor = recovery;
@@ -237,6 +242,7 @@ pub(crate) fn parse_for_expr(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let for_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::FOR_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
@@ -316,14 +322,14 @@ pub(crate) fn parse_for_expr(
         }
     }
 
-    let body_start = skip_ws_and_newlines(tokens, cursor);
+    let body_start = ctx.skip_ws_and_newlines(cursor);
     if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
         push_range(&mut events, cursor, body_expr.start);
         events.extend(body_expr.events);
         cursor = body_expr.end;
     } else {
         push_token_diagnostic(diagnostics, "expected expression after for clause", for_tok);
-        let recovery = skip_ws_and_newlines(tokens, cursor);
+        let recovery = ctx.skip_ws_and_newlines(cursor);
         push_range(&mut events, cursor, recovery);
         push_empty_error_node(&mut events);
         cursor = recovery;
@@ -342,10 +348,11 @@ pub(crate) fn parse_function_expr(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
+    let ctx = ParserCtx::new(tokens);
     let function_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::FUNCTION_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let params_lparen = skip_ws_and_newlines(tokens, cursor);
+    let params_lparen = ctx.skip_ws_and_newlines(cursor);
 
     if matches!(
         tokens.get(params_lparen).map(|t| &t.kind),
@@ -392,7 +399,7 @@ pub(crate) fn parse_function_expr(
         cursor = params_lparen;
     }
 
-    let body_start = skip_ws_and_newlines(tokens, cursor);
+    let body_start = ctx.skip_ws_and_newlines(cursor);
     if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
         push_range(&mut events, cursor, body_expr.start);
         events.extend(body_expr.events);
@@ -403,7 +410,7 @@ pub(crate) fn parse_function_expr(
             "expected expression after function parameters",
             function_tok,
         );
-        let recovery = skip_ws_and_newlines(tokens, cursor);
+        let recovery = ctx.skip_ws_and_newlines(cursor);
         push_range(&mut events, cursor, recovery);
         push_empty_error_node(&mut events);
         cursor = recovery;
