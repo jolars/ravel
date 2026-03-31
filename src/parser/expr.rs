@@ -153,6 +153,57 @@ fn parse_expr_with_mode(
             );
         }
 
+        if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
+            && matches!(
+                expr_root_kind(&rhs),
+                Some(SyntaxKind::CALL_EXPR | SyntaxKind::BLOCK_EXPR)
+            )
+        {
+            push_token_diagnostic(
+                diagnostics,
+                "namespace operator requires an identifier on the right-hand side",
+                op,
+            );
+        }
+
+        if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
+            && matches!(
+                expr_root_kind(&rhs),
+                Some(SyntaxKind::INT | SyntaxKind::FLOAT)
+            )
+        {
+            push_token_diagnostic(
+                diagnostics,
+                "namespace operator requires an identifier on the right-hand side",
+                op,
+            );
+        }
+
+        if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
+            && matches!(expr_root_kind(&rhs), Some(SyntaxKind::IDENT))
+        {
+            let rhs_tok_idx = skip_ws(tokens, rhs.start);
+            if let Some(tok) = tokens.get(rhs_tok_idx)
+                && ident_is_special_constant(tok.text.as_str())
+            {
+                push_token_diagnostic(
+                    diagnostics,
+                    "namespace operator requires an identifier on the right-hand side",
+                    op,
+                );
+            }
+        }
+
+        if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
+            && matches!(expr_root_kind(&lhs), Some(SyntaxKind::BINARY_EXPR))
+            && lhs
+                .events
+                .iter()
+                .any(|event| matches!(event, Event::Tok(idx) if matches!(tokens[*idx].kind, TokKind::Colon2 | TokKind::Colon3)))
+        {
+            push_token_diagnostic(diagnostics, "namespace operator chaining is not allowed", op);
+        }
+
         lhs = build_binary_expr(lhs, op_idx, rhs);
     }
 
@@ -450,6 +501,28 @@ fn has_newline(tokens: &[Token], start: usize, end: usize) -> bool {
     tokens[start..end]
         .iter()
         .any(|t| t.kind == TokKind::Newline)
+}
+
+fn expr_root_kind(expr: &ExprParse) -> Option<SyntaxKind> {
+    expr.events.iter().find_map(|event| match event {
+        Event::Start(kind) => Some(*kind),
+        _ => None,
+    })
+}
+
+fn ident_is_special_constant(text: &str) -> bool {
+    matches!(
+        text,
+        "NA" | "NULL"
+            | "TRUE"
+            | "FALSE"
+            | "Inf"
+            | "NaN"
+            | "NA_integer_"
+            | "NA_real_"
+            | "NA_complex_"
+            | "NA_character_"
+    )
 }
 
 fn parse_call_expr(

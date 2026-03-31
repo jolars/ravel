@@ -1,0 +1,112 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..652
+  COMMENT@0..75 "# TODO: tree-sitter-r ..."
+  NEWLINE@75..76 "\n"
+  COMMENT@76..152 "# requires a RHS, so  ..."
+  NEWLINE@152..153 "\n"
+  COMMENT@153..228 "# parse errors if we  ..."
+  NEWLINE@228..229 "\n"
+  COMMENT@229..257 "# For example, `a::1` ..."
+  NEWLINE@257..258 "\n"
+  NEWLINE@258..259 "\n"
+  COMMENT@259..284 "#> RNamespaceExpressi ..."
+  NEWLINE@284..285 "\n"
+  COMMENT@285..311 "#>     left: RIdentif ..."
+  NEWLINE@311..312 "\n"
+  COMMENT@312..389 "#>         name_token ..."
+  NEWLINE@389..390 "\n"
+  COMMENT@390..399 "#>     },"
+  NEWLINE@399..400 "\n"
+  COMMENT@400..440 "#>     operator: COLO ..."
+  NEWLINE@440..441 "\n"
+  COMMENT@441..474 "#>     right: missing ..."
+  NEWLINE@474..475 "\n"
+  COMMENT@475..480 "#> },"
+  NEWLINE@480..481 "\n"
+  COMMENT@481..498 "#> RDoubleValue {"
+  NEWLINE@498..499 "\n"
+  COMMENT@499..551 "#>     value_token: R ..."
+  NEWLINE@551..552 "\n"
+  COMMENT@552..557 "#> },"
+  NEWLINE@557..558 "\n"
+  NEWLINE@558..559 "\n"
+  BINARY_EXPR@559..563
+    IDENT@559..560 "a"
+    COLON2@560..562 "::"
+    INT@562..563 "1"
+  NEWLINE@563..564 "\n"
+  BINARY_EXPR@564..569
+    IDENT@564..565 "a"
+    COLON2@565..567 "::"
+    IDENT@567..569 "NA"
+  NEWLINE@569..570 "\n"
+  BINARY_EXPR@570..577
+    IDENT@570..571 "a"
+    COLON2@571..573 "::"
+    IDENT@573..577 "NULL"
+  NEWLINE@577..578 "\n"
+  BINARY_EXPR@578..585
+    IDENT@578..579 "a"
+    COLON2@579..581 "::"
+    IDENT@581..585 "TRUE"
+  NEWLINE@585..586 "\n"
+  BINARY_EXPR@586..592
+    IDENT@586..587 "a"
+    COLON2@587..589 "::"
+    PAREN_EXPR@589..592
+      LPAREN@589..590 "("
+      IDENT@590..591 "b"
+      RPAREN@591..592 ")"
+  NEWLINE@592..593 "\n"
+  BINARY_EXPR@593..601
+    IDENT@593..594 "a"
+    COLON2@594..596 "::"
+    BLOCK_EXPR@596..601
+      LBRACE@596..597 "{"
+      WHITESPACE@597..598 " "
+      IDENT@598..599 "b"
+      WHITESPACE@599..600 " "
+      RBRACE@600..601 "}"
+  NEWLINE@601..602 "\n"
+  NEWLINE@602..603 "\n"
+  BINARY_EXPR@603..608
+    IDENT@603..604 "a"
+    COLON3@604..607 ":::"
+    INT@607..608 "1"
+  NEWLINE@608..609 "\n"
+  BINARY_EXPR@609..615
+    IDENT@609..610 "a"
+    COLON3@610..613 ":::"
+    IDENT@613..615 "NA"
+  NEWLINE@615..616 "\n"
+  BINARY_EXPR@616..624
+    IDENT@616..617 "a"
+    COLON3@617..620 ":::"
+    IDENT@620..624 "NULL"
+  NEWLINE@624..625 "\n"
+  BINARY_EXPR@625..633
+    IDENT@625..626 "a"
+    COLON3@626..629 ":::"
+    IDENT@629..633 "TRUE"
+  NEWLINE@633..634 "\n"
+  BINARY_EXPR@634..641
+    IDENT@634..635 "a"
+    COLON3@635..638 ":::"
+    PAREN_EXPR@638..641
+      LPAREN@638..639 "("
+      IDENT@639..640 "b"
+      RPAREN@640..641 ")"
+  NEWLINE@641..642 "\n"
+  BINARY_EXPR@642..651
+    IDENT@642..643 "a"
+    COLON3@643..646 ":::"
+    BLOCK_EXPR@646..651
+      LBRACE@646..647 "{"
+      WHITESPACE@647..648 " "
+      IDENT@648..649 "b"
+      WHITESPACE@649..650 " "
+      RBRACE@650..651 "}"
+  NEWLINE@651..652 "\n"

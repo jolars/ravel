@@ -1,0 +1,11 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "namespace operator requires a package name on the left-hand side",
+        start: 3,
+        end: 6,
+    },
+]

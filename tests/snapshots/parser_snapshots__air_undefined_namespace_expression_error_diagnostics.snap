@@ -1,0 +1,16 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "namespace operator requires an identifier on the right-hand side",
+        start: 594,
+        end: 596,
+    },
+    ParseDiagnostic {
+        message: "namespace operator requires an identifier on the right-hand side",
+        start: 643,
+        end: 646,
+    },
+]

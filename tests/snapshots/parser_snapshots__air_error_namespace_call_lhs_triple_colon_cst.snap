@@ -1,0 +1,13 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..7
+  BINARY_EXPR@0..7
+    CALL_EXPR@0..3
+      IDENT@0..1 "a"
+      LPAREN@1..2 "("
+      ARG_LIST@2..2
+      RPAREN@2..3 ")"
+    COLON3@3..6 ":::"
+    IDENT@6..7 "b"

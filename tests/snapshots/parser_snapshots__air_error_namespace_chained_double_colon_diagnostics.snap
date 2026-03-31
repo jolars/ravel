@@ -1,0 +1,11 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "namespace operator chaining is not allowed",
+        start: 4,
+        end: 6,
+    },
+]

@@ -75,8 +75,8 @@ Use AIR snapshot cases as incremental parser-hardening input. Execute in order:
 easy -> medium -> hard.
 
 - [x] Phase A (easy): port easy `ok` + `error` cases
-- [ ] Phase B (medium): port medium `ok` cases
-- [ ] Phase C (hard): implement grammar needed for hard `ok`/`error`/`undefined`
+- [x] Phase B (medium): port medium `ok` cases
+- [x] Phase C (hard): implement grammar needed for hard `ok`/`error`/`undefined`
       cases
 
 ### AIR `ok` cases (29)
@@ -119,14 +119,14 @@ easy -> medium -> hard.
 - [x] `error/parenthesized_expression/empty.R` (easy)
 - [x] `error/parenthesized_expression/multiple.R` (easy)
 - [x] `error/namespace_expression/call_lhs_double_colon.R` (hard)
-- [ ] `error/namespace_expression/call_lhs_triple_colon.R` (hard)
-- [ ] `error/namespace_expression/chained_double_colon.R` (hard)
-- [ ] `error/namespace_expression/chained_triple_colon.R` (hard)
+- [x] `error/namespace_expression/call_lhs_triple_colon.R` (hard)
+- [x] `error/namespace_expression/chained_double_colon.R` (hard)
+- [x] `error/namespace_expression/chained_triple_colon.R` (hard)
 
 ### AIR `undefined` cases (2)
 
-- [ ] `undefined/extract_expression_error.R` (hard)
-- [ ] `undefined/namespace_expression_error.R` (hard)
+- [x] `undefined/extract_expression_error.R` (hard)
+- [x] `undefined/namespace_expression_error.R` (hard)
 
 ## Phase 3: Rowan CST + validation
 
