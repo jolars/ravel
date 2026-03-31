@@ -60,6 +60,7 @@ fn fixture_names() -> &'static [&'static str] {
         "expr_additive_multiplicative_colon",
         "expr_tilde_userop",
         "expr_extract_namespace",
+        "expr_newline_binary_break",
         "expr_missing_rhs",
         "expr_unexpected_prefix_op",
         "if_simple",

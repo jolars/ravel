@@ -1,4 +1,4 @@
-use crate::parser::cursor::skip_ws;
+use crate::parser::cursor::{skip_ws, skip_ws_and_newlines};
 use crate::parser::diagnostics::{ParseDiagnostic, push_token_diagnostic};
 use crate::parser::events::{Event, ExprParse};
 use crate::parser::lexer::{TokKind, Token};
@@ -19,13 +19,48 @@ fn is_assignment_operator(kind: &TokKind) -> bool {
     )
 }
 
+fn is_infix_operator(kind: &TokKind) -> bool {
+    infix_binding_power(kind).is_some()
+}
+
+fn next_operator(tokens: &[Token], start: usize) -> Option<(usize, &Token)> {
+    let op_idx = skip_ws(tokens, start);
+    let op = tokens.get(op_idx)?;
+    if op.kind == TokKind::Newline {
+        let next_idx = skip_ws_and_newlines(tokens, start);
+        let next = tokens.get(next_idx)?;
+        if is_assignment_operator(&next.kind) || is_infix_operator(&next.kind) {
+            return Some((next_idx, next));
+        }
+        return None;
+    }
+    if is_assignment_operator(&op.kind) || is_infix_operator(&op.kind) {
+        return Some((op_idx, op));
+    }
+    None
+}
+
 pub(crate) fn parse_expr(
     tokens: &[Token],
     start: usize,
     min_bp: u8,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
-    let start_non_ws = skip_ws(tokens, start);
+    parse_expr_with_mode(tokens, start, min_bp, diagnostics, false)
+}
+
+fn parse_expr_with_mode(
+    tokens: &[Token],
+    start: usize,
+    min_bp: u8,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+    allow_newline_prefix: bool,
+) -> Option<ExprParse> {
+    let start_non_ws = if allow_newline_prefix {
+        skip_ws_and_newlines(tokens, start)
+    } else {
+        skip_ws(tokens, start)
+    };
     if matches!(
         tokens.get(start_non_ws).map(|t| &t.kind),
         Some(TokKind::IfKw)
@@ -51,11 +86,10 @@ pub(crate) fn parse_expr(
         return parse_function_expr(tokens, start_non_ws, diagnostics);
     }
 
-    let mut lhs = parse_prefix(tokens, start, diagnostics)?;
+    let mut lhs = parse_prefix(tokens, start, diagnostics, allow_newline_prefix)?;
 
     loop {
-        let op_idx = skip_ws(tokens, lhs.end);
-        let Some(op) = tokens.get(op_idx) else {
+        let Some((op_idx, op)) = next_operator(tokens, lhs.end) else {
             break;
         };
 
@@ -66,7 +100,10 @@ pub(crate) fn parse_expr(
             }
 
             let rhs_start = op_idx + 1;
-            let Some(rhs) = parse_expr(tokens, rhs_start, r_bp, diagnostics) else {
+            let rhs_allow_newline = op.kind == TokKind::Pipe || op.kind == TokKind::UserOp;
+            let Some(rhs) =
+                parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, rhs_allow_newline)
+            else {
                 push_token_diagnostic(diagnostics, "expected assignment right-hand side", op);
                 return Some(error_expr_to_line_end(tokens, lhs.start, rhs_start));
             };
@@ -99,7 +136,10 @@ pub(crate) fn parse_expr(
         }
 
         let rhs_start = op_idx + 1;
-        let Some(rhs) = parse_expr(tokens, rhs_start, r_bp, diagnostics) else {
+        let rhs_allow_newline = op.kind == TokKind::Pipe || op.kind == TokKind::UserOp;
+        let Some(rhs) =
+            parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, rhs_allow_newline)
+        else {
             push_token_diagnostic(
                 diagnostics,
                 "expected right-hand side for binary operator",
@@ -135,8 +175,13 @@ fn parse_prefix(
     tokens: &[Token],
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
+    allow_newline_prefix: bool,
 ) -> Option<ExprParse> {
-    let i = skip_ws(tokens, start);
+    let i = if allow_newline_prefix {
+        skip_ws_and_newlines(tokens, start)
+    } else {
+        skip_ws(tokens, start)
+    };
     let tok = tokens.get(i)?;
 
     match tok.kind {
@@ -154,7 +199,8 @@ fn parse_prefix(
         }),
         TokKind::LParen => {
             let inner_start = i + 1;
-            let Some(inner) = parse_expr(tokens, inner_start, 0, diagnostics) else {
+            let Some(inner) = parse_expr_with_mode(tokens, inner_start, 0, diagnostics, true)
+            else {
                 push_token_diagnostic(diagnostics, "expected expression after '('", tok);
                 return Some(error_expr_to_line_end(tokens, i, inner_start));
             };

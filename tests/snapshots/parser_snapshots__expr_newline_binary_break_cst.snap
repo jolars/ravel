@@ -1,0 +1,44 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..40
+  ERROR@0..4
+    IDENT@0..1 "x"
+    WHITESPACE@1..2 " "
+    PLUS@2..3 "+"
+    NEWLINE@3..4 "\n"
+  WHITESPACE@4..6 "  "
+  IDENT@6..7 "y"
+  NEWLINE@7..8 "\n"
+  ERROR@8..12
+    IDENT@8..9 "x"
+    WHITESPACE@9..10 " "
+    STAR@10..11 "*"
+    NEWLINE@11..12 "\n"
+  WHITESPACE@12..14 "  "
+  IDENT@14..15 "y"
+  NEWLINE@15..16 "\n"
+  ERROR@16..21
+    IDENT@16..17 "x"
+    WHITESPACE@17..18 " "
+    ASSIGN_LEFT@18..20 "<-"
+    NEWLINE@20..21 "\n"
+  WHITESPACE@21..23 "  "
+  IDENT@23..24 "y"
+  NEWLINE@24..25 "\n"
+  BINARY_EXPR@25..30
+    IDENT@25..26 "x"
+    NEWLINE@26..27 "\n"
+    PLUS@27..28 "+"
+    WHITESPACE@28..29 " "
+    IDENT@29..30 "y"
+  NEWLINE@30..31 "\n"
+  BINARY_EXPR@31..39
+    IDENT@31..32 "x"
+    WHITESPACE@32..33 " "
+    PIPE@33..35 "|>"
+    NEWLINE@35..36 "\n"
+    WHITESPACE@36..38 "  "
+    IDENT@38..39 "f"
+  NEWLINE@39..40 "\n"

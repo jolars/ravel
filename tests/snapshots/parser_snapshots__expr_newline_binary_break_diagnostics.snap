@@ -1,0 +1,21 @@
+---
+source: tests/parser_snapshots.rs
+expression: "format!(\"{:#?}\", output.diagnostics)"
+---
+[
+    ParseDiagnostic {
+        message: "expected right-hand side for binary operator",
+        start: 2,
+        end: 3,
+    },
+    ParseDiagnostic {
+        message: "expected right-hand side for binary operator",
+        start: 10,
+        end: 11,
+    },
+    ParseDiagnostic {
+        message: "expected assignment right-hand side",
+        start: 18,
+        end: 20,
+    },
+]
