@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use ravel::formatter::{FormatError, format};
+use ravel::formatter::{FormatError, FormatStyle, format, format_with_style};
 use ravel::parser::{parse, reconstruct};
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -45,6 +45,7 @@ fn fixture_text(name: &str, file: &str) -> String {
 
 fn fixture_names() -> &'static [&'static str] {
     &[
+        "air_binary_expression_subset",
         "assignment_precedence",
         "if_else_block",
         "inline_comment",
@@ -85,6 +86,75 @@ fn preserves_comment_only_lines() {
 fn rejects_unsupported_constructs_explicitly() {
     let err = format("x %foo% y\n").expect_err("user operators are unsupported currently");
     assert!(matches!(err, FormatError::UnsupportedConstruct { .. }));
+}
+
+#[test]
+fn explicit_default_style_matches_default_format() {
+    let input = "if(x){y<-1+2}else{z<-3}\n";
+    let implicit = format(input).expect("default format should succeed");
+    let explicit = format_with_style(input, FormatStyle::default())
+        .expect("format_with_style default should succeed");
+    assert_eq!(implicit, explicit);
+}
+
+#[test]
+fn wraps_binary_expression_when_width_is_exceeded() {
+    let input = "alpha <- beta + gamma_delta\n";
+    let style = FormatStyle {
+        line_width: 17,
+        indent_width: 2,
+    };
+    let expected = "alpha <- beta\n  + gamma_delta\n";
+    let formatted = format_with_style(input, style).expect("format should succeed");
+    assert_eq!(formatted, expected);
+
+    let reformatted = format_with_style(&formatted, style).expect("reformat should succeed");
+    assert_eq!(reformatted, expected);
+}
+
+#[test]
+fn wraps_call_arguments_when_width_is_exceeded() {
+    let input = "call(first_arg, second_argument, third)\n";
+    let style = FormatStyle {
+        line_width: 22,
+        indent_width: 2,
+    };
+    let expected = "call(\n  first_arg,\n  second_argument,\n  third\n)\n";
+    let formatted = format_with_style(input, style).expect("format should succeed");
+    assert_eq!(formatted, expected);
+
+    let reformatted = format_with_style(&formatted, style).expect("reformat should succeed");
+    assert_eq!(reformatted, expected);
+}
+
+#[test]
+fn preserves_trailing_comments_when_wrapping_calls() {
+    let input = "fn_name(argument, second) # keep\n";
+    let style = FormatStyle {
+        line_width: 18,
+        indent_width: 2,
+    };
+    let expected = "fn_name(\n  argument,\n  second\n) # keep\n";
+    let formatted = format_with_style(input, style).expect("format should succeed");
+    assert_eq!(formatted, expected);
+
+    let reformatted = format_with_style(&formatted, style).expect("reformat should succeed");
+    assert_eq!(reformatted, expected);
+}
+
+#[test]
+fn block_contents_are_width_aware() {
+    let input = "if (x) { total <- alpha + gamma_delta }\n";
+    let style = FormatStyle {
+        line_width: 20,
+        indent_width: 2,
+    };
+    let expected = "if (x) {\n  total <- alpha\n    + gamma_delta\n}\n";
+    let formatted = format_with_style(input, style).expect("format should succeed");
+    assert_eq!(formatted, expected);
+
+    let reformatted = format_with_style(&formatted, style).expect("reformat should succeed");
+    assert_eq!(reformatted, expected);
 }
 
 #[test]
