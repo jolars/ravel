@@ -127,6 +127,7 @@ fn fixture_names() -> &'static [&'static str] {
         "air_error_call_side_by_side_arguments",
         "air_error_parenthesized_expression_empty",
         "air_error_parenthesized_expression_multiple",
+        "air_error_namespace_call_lhs_double_colon",
         "air_ok_parenthesized_expression",
         "air_ok_semicolons_semicolon_end_of_file_01",
         "air_ok_semicolons_semicolon_end_of_file_02",

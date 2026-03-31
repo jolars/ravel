@@ -118,7 +118,7 @@ easy -> medium -> hard.
 - [x] `error/call/side_by_side_arguments.R` (easy)
 - [x] `error/parenthesized_expression/empty.R` (easy)
 - [x] `error/parenthesized_expression/multiple.R` (easy)
-- [ ] `error/namespace_expression/call_lhs_double_colon.R` (hard)
+- [x] `error/namespace_expression/call_lhs_double_colon.R` (hard)
 - [ ] `error/namespace_expression/call_lhs_triple_colon.R` (hard)
 - [ ] `error/namespace_expression/chained_double_colon.R` (hard)
 - [ ] `error/namespace_expression/chained_triple_colon.R` (hard)

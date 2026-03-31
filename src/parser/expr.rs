@@ -140,6 +140,19 @@ fn parse_expr_with_mode(
             return Some(error_expr_to_line_end(tokens, lhs.start, rhs_start));
         };
 
+        if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
+            && lhs
+                .events
+                .iter()
+                .any(|event| matches!(event, Event::Start(SyntaxKind::CALL_EXPR)))
+        {
+            push_token_diagnostic(
+                diagnostics,
+                "namespace operator requires a package name on the left-hand side",
+                op,
+            );
+        }
+
         lhs = build_binary_expr(lhs, op_idx, rhs);
     }
 
