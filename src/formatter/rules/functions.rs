@@ -83,7 +83,7 @@ fn try_hug_single_argument_call(
     if arg.is_comment_only || arg.formatted.is_empty() {
         return None;
     }
-    if arg.formatted.contains(" = ") {
+    if arg.is_named {
         return None;
     }
     if !arg.formatted.contains('\n') {
@@ -91,7 +91,7 @@ fn try_hug_single_argument_call(
     }
 
     let normalized = normalize_empty_call_newlines(&arg.formatted);
-    if normalized.trim_start().starts_with('{') || normalized.contains('#') {
+    if normalized.trim_start().starts_with('{') {
         return None;
     }
     if !normalized.contains('\n') {
@@ -433,6 +433,7 @@ struct ArgInfo {
     is_empty: bool,
     is_comment_only: bool,
     leading_newline: bool,
+    is_named: bool,
 }
 
 fn collect_call_items(
@@ -448,12 +449,14 @@ fn collect_call_items(
                 let formatted = format_arg(arg, indent, ctx)?;
                 let is_empty = formatted.is_empty();
                 let is_comment_only = is_comment_only_arg(arg);
+                let is_named = is_named_arg_node(arg);
                 let leading_newline = has_newline_before_arg(&elements, idx);
                 items.push(CallItem::Arg(ArgInfo {
                     formatted,
                     is_empty,
                     is_comment_only,
                     leading_newline,
+                    is_named,
                 }));
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -509,6 +512,7 @@ fn collect_call_arg_parts(
                     is_empty: false,
                     is_comment_only,
                     leading_newline: false,
+                    is_named: is_named_arg_node(&arg),
                 });
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -545,6 +549,15 @@ fn has_newline_before_arg(elements: &[SyntaxElement<RLanguage>], idx: usize) -> 
         }
     }
     false
+}
+
+fn is_named_arg_node(node: &SyntaxNode) -> bool {
+    node.children_with_tokens().any(|el| {
+        matches!(
+            el,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ
+        )
+    })
 }
 
 fn try_format_call_with_trailing_block(
