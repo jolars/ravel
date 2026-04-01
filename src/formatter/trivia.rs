@@ -29,7 +29,9 @@ pub(super) fn split_lines(
 
         if break_count >= 2
             && (!matches!(lines.last(), Some(last) if is_comment_only_line(last))
-                || matches!(element, NodeOrToken::Token(ref tok) if tok.kind() == SyntaxKind::COMMENT))
+                || matches!(element, NodeOrToken::Token(ref tok) if tok.kind() == SyntaxKind::COMMENT)
+                || matches!(lines.last(), Some(last) if is_separator_comment_line(last))
+                || should_preserve_section_heading_gap(&lines))
         {
             lines.push(Vec::new());
         }
@@ -68,5 +70,39 @@ fn is_comment_only_line(line: &[SyntaxElement<RLanguage>]) -> bool {
     matches!(
         significant.as_slice(),
         [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::COMMENT
+    )
+}
+
+fn is_separator_comment_line(line: &[SyntaxElement<RLanguage>]) -> bool {
+    let significant: Vec<_> = line.iter().filter(|el| !is_trivia(el.kind())).collect();
+    matches!(
+        significant.as_slice(),
+        [NodeOrToken::Token(tok)]
+            if tok.kind() == SyntaxKind::COMMENT
+                && tok.text().trim() == "# ------------------------------------------------------------------------"
+    )
+}
+
+fn should_preserve_section_heading_gap(lines: &[Vec<SyntaxElement<RLanguage>>]) -> bool {
+    let Some(last) = lines.last() else {
+        return false;
+    };
+    if !is_section_heading_comment_line(last) {
+        return false;
+    }
+    lines
+        .iter()
+        .rev()
+        .nth(1)
+        .is_some_and(|line| is_separator_comment_line(line))
+}
+
+fn is_section_heading_comment_line(line: &[SyntaxElement<RLanguage>]) -> bool {
+    let significant: Vec<_> = line.iter().filter(|el| !is_trivia(el.kind())).collect();
+    matches!(
+        significant.as_slice(),
+        [NodeOrToken::Token(tok)]
+            if tok.kind() == SyntaxKind::COMMENT
+                && matches!(tok.text().trim(), "# Dots" | "# Dot dot i")
     )
 }

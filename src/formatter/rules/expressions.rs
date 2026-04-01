@@ -125,6 +125,13 @@ pub(crate) fn format_binary_expr(
             format!("{lhs}\n{}{} {rhs}", ctx.indent_text(indent + 1), op_text),
         )
     };
+    if op_kind == SyntaxKind::PIPE {
+        return Ok(format!(
+            "{lhs} {op_text}\n{}{}",
+            ctx.indent_text(indent + 1),
+            rhs
+        ));
+    }
     if ctx.fits_inline(indent, &inline) {
         return Ok(inline);
     }
