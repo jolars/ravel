@@ -66,6 +66,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_trailing_inline_function",
         "call_comments_trailing_braced_expression",
         "call_named_args_without_rhs",
+        "call_trailing_curly_curly",
     ]
 }
 

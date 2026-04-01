@@ -614,6 +614,10 @@ fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<St
         return format_assignment_expr_arg(assign, indent, ctx);
     }
 
+    if let Some(curly_curly) = try_format_curly_curly(&significant, indent, ctx)? {
+        return Ok(curly_curly);
+    }
+
     if let Some(eq_idx) = elements
         .iter()
         .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
@@ -663,6 +667,68 @@ fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<St
     }
 
     format_expr_with_optional_comment(&elements, "positional arg", indent, ctx)
+}
+
+fn try_format_curly_curly(
+    significant: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<String>, FormatError> {
+    let [NodeOrToken::Node(outer)] = significant else {
+        return Ok(None);
+    };
+    if outer.kind() != SyntaxKind::BLOCK_EXPR {
+        return Ok(None);
+    }
+
+    let outer_significant: Vec<_> = outer
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if outer_significant.len() != 3 {
+        return Ok(None);
+    }
+    let [
+        NodeOrToken::Token(outer_l),
+        NodeOrToken::Node(inner),
+        NodeOrToken::Token(outer_r),
+    ] = outer_significant.as_slice()
+    else {
+        return Ok(None);
+    };
+    if outer_l.kind() != SyntaxKind::LBRACE || outer_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+    if inner.kind() != SyntaxKind::BLOCK_EXPR {
+        return Ok(None);
+    }
+
+    let inner_significant: Vec<_> = inner
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if inner_significant.len() < 2 {
+        return Ok(None);
+    }
+    let Some(NodeOrToken::Token(inner_l)) = inner_significant.first() else {
+        return Ok(None);
+    };
+    let Some(NodeOrToken::Token(inner_r)) = inner_significant.last() else {
+        return Ok(None);
+    };
+    if inner_l.kind() != SyntaxKind::LBRACE || inner_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+
+    let inner_body = &inner_significant[1..inner_significant.len() - 1];
+    if inner_body.is_empty() {
+        return Ok(None);
+    }
+    let body = format_expr_segment(inner_body, "curly-curly inner body", indent, ctx)?;
+    if body.contains('\n') || body.trim_start().starts_with('#') {
+        return Ok(None);
+    }
+    Ok(Some(format!("{{{{ {body} }}}}")))
 }
 
 fn format_named_arg_with_assignment_node(
