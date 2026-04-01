@@ -604,7 +604,14 @@ fn parse_call_expr(
             }
             events.push(Event::Tok(eq_idx)); // =
             let val_start = eq_idx + 1;
-            if let Some(val) = parse_expr(tokens, val_start, 0, diagnostics) {
+            let mut value_idx = val_start;
+            while matches!(
+                tokens.get(value_idx).map(|t| &t.kind),
+                Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+            ) {
+                value_idx += 1;
+            }
+            if let Some(val) = parse_expr(tokens, value_idx, 0, diagnostics) {
                 for idx in val_start..val.start {
                     events.push(Event::Tok(idx));
                 }

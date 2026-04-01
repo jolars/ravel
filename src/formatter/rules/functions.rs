@@ -120,6 +120,35 @@ fn format_arg_list_multiline(
                 i += 1;
             }
             CallItem::Arg(arg) => {
+                if let Some(CallItem::Arg(next_arg)) = items.get(i + 1)
+                    && !arg.is_comment_only
+                    && is_assignment_continuation(&next_arg.formatted)
+                {
+                    for line in merge_named_arg_continuation(
+                        &arg.formatted,
+                        &next_arg.formatted,
+                        &item_indent,
+                    ) {
+                        out.push(line);
+                    }
+                    i += 2;
+                    continue;
+                }
+
+                if let Some(CallItem::Arg(comment_arg)) = items.get(i + 1)
+                    && comment_arg.is_comment_only
+                    && !comment_arg.leading_newline
+                {
+                    out.push(append_trailing_comment(
+                        &arg.formatted,
+                        &comment_arg.formatted,
+                        &item_indent,
+                        false,
+                    ));
+                    i += 2;
+                    continue;
+                }
+
                 if let (
                     Some(CallItem::Comma {
                         newline_after: false,
@@ -144,10 +173,10 @@ fn format_arg_list_multiline(
                 }
 
                 if matches!(items.get(i + 1), Some(CallItem::Comma { .. })) {
-                    out.push(format!("{item_indent}{},", arg.formatted));
+                    out.push(indent_multiline_arg(&arg.formatted, &item_indent, true));
                     i += 2;
                 } else {
-                    out.push(format!("{item_indent}{}", arg.formatted));
+                    out.push(indent_multiline_arg(&arg.formatted, &item_indent, false));
                     i += 1;
                 }
             }
@@ -161,6 +190,158 @@ fn format_arg_list_multiline(
     Ok(out.join("\n"))
 }
 
+fn indent_multiline_arg(formatted: &str, item_indent: &str, trailing_comma: bool) -> String {
+    let mut lines: Vec<String> = formatted.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return format!("{item_indent}{}", if trailing_comma { "," } else { "" });
+    }
+
+    let item_indent_len = item_indent.len();
+    if lines.len() > 1
+        && let Some(expr_start) = lines
+            .iter()
+            .position(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+    {
+        let min_rest_indent = lines
+            .iter()
+            .skip(expr_start + 1)
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.chars().take_while(|c| *c == ' ').count())
+            .min()
+            .unwrap_or(0);
+        if min_rest_indent >= item_indent_len {
+            for line in lines.iter_mut().skip(expr_start + 1) {
+                if line.len() >= item_indent_len {
+                    *line = line[item_indent_len..].to_string();
+                }
+            }
+        }
+    }
+
+    for line in &mut lines {
+        *line = format!("{item_indent}{line}");
+    }
+    if trailing_comma && let Some(last) = lines.last_mut() {
+        last.push(',');
+    }
+    lines.join("\n")
+}
+
+fn is_assignment_continuation(formatted: &str) -> bool {
+    let mut saw_comment = false;
+    for line in formatted.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            saw_comment = true;
+            continue;
+        }
+        if trimmed.starts_with('=') {
+            return true;
+        }
+        if saw_comment {
+            return false;
+        }
+        return false;
+    }
+    false
+}
+
+fn merge_named_arg_continuation(name: &str, continuation: &str, item_indent: &str) -> Vec<String> {
+    let lines: Vec<&str> = continuation.lines().collect();
+    let mut out = Vec::new();
+    if lines.is_empty() {
+        out.push(format!("{item_indent}{name}"));
+        return out;
+    }
+
+    let mut name_lines = name.lines().map(str::trim).filter(|l| !l.is_empty());
+    let mut comments = Vec::new();
+    let mut lhs = None::<String>;
+    for line in name_lines.by_ref() {
+        if line.starts_with('#') {
+            comments.push(line.to_string());
+        } else if lhs.is_none() {
+            lhs = Some(line.to_string());
+        }
+    }
+    let mut rhs_idx = 0usize;
+    let mut rhs_comments = Vec::new();
+    while rhs_idx < lines.len() {
+        let trimmed = lines[rhs_idx].trim();
+        if trimmed.is_empty() {
+            rhs_idx += 1;
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            rhs_comments.push(trimmed.to_string());
+            rhs_idx += 1;
+            continue;
+        }
+        break;
+    }
+
+    for comment in comments {
+        out.push(format!("{item_indent}{comment}"));
+    }
+    for comment in rhs_comments {
+        out.push(format!("{item_indent}{comment}"));
+    }
+
+    if rhs_idx >= lines.len() {
+        out.push(format!(
+            "{item_indent}{}",
+            lhs.unwrap_or_else(|| name.trim().to_string())
+        ));
+        return out;
+    }
+
+    let first_rhs = lines[rhs_idx].trim_start();
+    let lhs_text = lhs.unwrap_or_else(|| name.trim().to_string());
+    out.push(format!("{item_indent}{lhs_text} {first_rhs}"));
+    let tail = &lines[rhs_idx + 1..];
+    let min_tail_indent = tail
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.chars().take_while(|c| *c == ' ').count())
+        .min()
+        .unwrap_or(0);
+    for line in tail {
+        let normalized = if line.len() >= min_tail_indent {
+            &line[min_tail_indent..]
+        } else {
+            line
+        };
+        out.push(format!("{item_indent}{normalized}"));
+    }
+    out
+}
+
+fn append_trailing_comment(
+    formatted: &str,
+    comment: &str,
+    item_indent: &str,
+    trailing_comma: bool,
+) -> String {
+    let mut lines: Vec<String> = formatted.lines().map(ToString::to_string).collect();
+    if lines.is_empty() {
+        return format!("{item_indent}{comment}");
+    }
+    if let Some(first) = lines.first_mut() {
+        *first = format!("{item_indent}{first}");
+    }
+    if let Some(last) = lines.last_mut() {
+        last.push(' ');
+        last.push_str(comment);
+        if trailing_comma {
+            last.push(',');
+        }
+    }
+    lines.join("\n")
+}
+
 enum CallItem {
     Arg(ArgInfo),
     Comma { newline_after: bool },
@@ -170,6 +351,7 @@ struct ArgInfo {
     formatted: String,
     is_empty: bool,
     is_comment_only: bool,
+    leading_newline: bool,
 }
 
 fn collect_call_items(
@@ -185,10 +367,12 @@ fn collect_call_items(
                 let formatted = format_arg(arg, indent, ctx)?;
                 let is_empty = formatted.is_empty();
                 let is_comment_only = is_comment_only_arg(arg);
+                let leading_newline = has_newline_before_arg(&elements, idx);
                 items.push(CallItem::Arg(ArgInfo {
                     formatted,
                     is_empty,
                     is_comment_only,
+                    leading_newline,
                 }));
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -243,6 +427,7 @@ fn collect_call_arg_parts(
                     formatted,
                     is_empty: false,
                     is_comment_only,
+                    leading_newline: false,
                 });
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -261,6 +446,24 @@ fn collect_call_arg_parts(
         has_non_empty_arg,
         has_comment_arg,
     })
+}
+
+fn has_newline_before_arg(elements: &[SyntaxElement<RLanguage>], idx: usize) -> bool {
+    for prev in elements[..idx].iter().rev() {
+        match prev {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE => return true,
+            NodeOrToken::Token(tok)
+                if tok.kind() == SyntaxKind::WHITESPACE || tok.kind() == SyntaxKind::COMMENT => {}
+            NodeOrToken::Token(tok)
+                if tok.kind() == SyntaxKind::COMMA || tok.kind() == SyntaxKind::LPAREN =>
+            {
+                return false;
+            }
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG => return false,
+            _ => return false,
+        }
+    }
+    false
 }
 
 fn try_format_call_with_trailing_block(
@@ -283,6 +486,15 @@ fn try_format_call_with_trailing_block(
         return Ok(None);
     };
     if !looks_like_trailing_block_arg(&last.formatted) {
+        return Ok(None);
+    }
+    if last
+        .formatted
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .map(|line| line.trim_start().starts_with('#'))
+        .unwrap_or(false)
+    {
         return Ok(None);
     }
     if leading.iter().any(|arg| arg.formatted.contains('\n')) {
@@ -377,20 +589,148 @@ fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<St
         return Ok(tok.text().to_string());
     }
 
+    if let [NodeOrToken::Node(assign)] = significant.as_slice()
+        && assign.kind() == SyntaxKind::ASSIGNMENT_EXPR
+    {
+        return format_assignment_expr_arg(assign, indent, ctx);
+    }
+
     if let Some(eq_idx) = elements
         .iter()
         .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
     {
         let name = format_expr_segment(&elements[..eq_idx], "named arg name", indent, ctx)?;
-        let value = format_expr_with_optional_comment(
-            &elements[eq_idx + 1..],
-            "named arg value",
-            indent,
-            ctx,
-        )?;
-        return Ok(format!("{name} = {value}"));
+        let (leading_comments, value) =
+            format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
+        let base = format!("{name} = {value}");
+        if leading_comments.is_empty() {
+            return Ok(base);
+        }
+        return Ok(format!("{}\n{base}", leading_comments.join("\n")));
     }
+
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if let [NodeOrToken::Token(name_tok), NodeOrToken::Node(assign_node)] = significant.as_slice()
+        && name_tok.kind() == SyntaxKind::IDENT
+        && assign_node.kind() == SyntaxKind::ASSIGNMENT_EXPR
+    {
+        return format_named_arg_with_assignment_node(name_tok.text(), assign_node, indent, ctx);
+    }
+
     format_expr_with_optional_comment(&elements, "positional arg", indent, ctx)
+}
+
+fn format_named_arg_with_assignment_node(
+    name: &str,
+    assign_node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let elements: Vec<_> = assign_node.children_with_tokens().collect();
+    let eq_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '=' in assignment node for named arg",
+            snippet: assign_node.text().to_string(),
+        })?;
+
+    let leading_comments: Vec<String> = elements[..eq_idx]
+        .iter()
+        .filter_map(|el| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                Some(tok.text().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    let (rhs_leading_comments, value) =
+        format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
+    let base = format!("{name} = {value}");
+    let mut all_comments = leading_comments;
+    all_comments.extend(rhs_leading_comments);
+    if all_comments.is_empty() {
+        return Ok(base);
+    }
+    Ok(format!("{}\n{base}", all_comments.join("\n")))
+}
+
+fn format_assignment_expr_arg(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let eq_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '=' in assignment expr arg",
+            snippet: node.text().to_string(),
+        })?;
+
+    let leading_comments: Vec<String> = elements[..eq_idx]
+        .iter()
+        .filter_map(|el| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                Some(tok.text().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    let lhs_significant: Vec<_> = elements[..eq_idx]
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()) && el.kind() != SyntaxKind::COMMENT)
+        .cloned()
+        .collect();
+    let (rhs_leading_comments, rhs) =
+        format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
+
+    let tail = if lhs_significant.is_empty() {
+        format!("= {rhs}")
+    } else {
+        let lhs = format_expr_segment(&elements[..eq_idx], "assignment expr arg lhs", indent, ctx)?;
+        format!("{lhs} = {rhs}")
+    };
+    let mut all_comments = leading_comments;
+    all_comments.extend(rhs_leading_comments);
+    if all_comments.is_empty() {
+        return Ok(tail);
+    }
+    Ok(format!("{}\n{tail}", all_comments.join("\n")))
+}
+
+fn format_assignment_rhs_with_leading_comments(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(Vec<String>, String), FormatError> {
+    let mut idx = 0usize;
+    let mut leading_comments = Vec::new();
+    while idx < elements.len() {
+        match &elements[idx] {
+            NodeOrToken::Token(tok) if super::super::core::is_trivia(tok.kind()) => {
+                idx += 1;
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                leading_comments.push(tok.text().to_string());
+                idx += 1;
+            }
+            _ => break,
+        }
+    }
+    if idx >= elements.len() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "assignment rhs missing expression",
+            snippet: snippet_from_elements(elements),
+        });
+    }
+    let value = format_expr_with_optional_comment(&elements[idx..], "assignment rhs", indent, ctx)?;
+    Ok((leading_comments, value))
 }
 
 pub(crate) fn format_function_expr(
