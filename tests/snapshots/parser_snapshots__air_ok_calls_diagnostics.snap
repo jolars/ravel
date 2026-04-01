@@ -1,5 +1,6 @@
 ---
 source: tests/parser_snapshots.rs
+assertion_line: 14
 expression: "format!(\"{:#?}\", output.diagnostics)"
 ---
 [
@@ -45,16 +46,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
-        start: 170,
-        end: 183,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 184,
-        end: 186,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
         start: 190,
         end: 192,
     },
@@ -62,16 +53,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         message: "expected ',' between arguments",
         start: 198,
         end: 200,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 212,
-        end: 227,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 228,
-        end: 230,
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
@@ -85,23 +66,8 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
-        start: 288,
-        end: 289,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 290,
-        end: 300,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
         start: 303,
         end: 305,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 311,
-        end: 321,
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
@@ -110,23 +76,8 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
-        start: 341,
-        end: 351,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
         start: 355,
         end: 356,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 370,
-        end: 418,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 419,
-        end: 421,
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",

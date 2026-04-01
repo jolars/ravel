@@ -87,26 +87,116 @@ fn format_arg_list_multiline(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<String, FormatError> {
-    let parts = collect_call_arg_parts(node, indent + 1, ctx)?;
-    if parts.formatted_args.is_empty() {
+    let items = collect_call_items(node, indent + 1, ctx)?;
+    if items.is_empty() {
         return Ok(String::new());
     }
 
     let mut out = Vec::new();
-    for (idx, formatted) in parts.formatted_args.iter().enumerate() {
-        let mut line = format!("{}{}", ctx.indent_text(indent + 1), formatted);
-        if idx < parts.comma_count {
-            if parts.comment_arg_mask.get(idx).copied().unwrap_or(false) && !formatted.is_empty() {
-                out.push(line);
-                out.push(format!("{},", ctx.indent_text(indent + 1)));
-                continue;
+    let item_indent = ctx.indent_text(indent + 1);
+    let mut i = 0usize;
+    while i < items.len() {
+        match &items[i] {
+            CallItem::Arg(arg) if arg.is_empty => {
+                i += 1;
             }
-            line.push(',');
+            CallItem::Arg(arg) if arg.is_comment_only => {
+                out.push(format!("{item_indent}{}", arg.formatted));
+                i += 1;
+            }
+            CallItem::Arg(arg) => {
+                if let (
+                    Some(CallItem::Comma {
+                        newline_after: false,
+                    }),
+                    Some(CallItem::Arg(comment_arg)),
+                ) = (items.get(i + 1), items.get(i + 2))
+                    && comment_arg.is_comment_only
+                {
+                    out.push(format!(
+                        "{item_indent}{}, {}",
+                        arg.formatted, comment_arg.formatted
+                    ));
+                    i += 3;
+                    while let Some(CallItem::Arg(extra_comment)) = items.get(i) {
+                        if !extra_comment.is_comment_only {
+                            break;
+                        }
+                        out.push(format!("{item_indent}   {}", extra_comment.formatted));
+                        i += 1;
+                    }
+                    continue;
+                }
+
+                if matches!(items.get(i + 1), Some(CallItem::Comma { .. })) {
+                    out.push(format!("{item_indent}{},", arg.formatted));
+                    i += 2;
+                } else {
+                    out.push(format!("{item_indent}{}", arg.formatted));
+                    i += 1;
+                }
+            }
+            CallItem::Comma { .. } => {
+                out.push(format!("{item_indent},"));
+                i += 1;
+            }
         }
-        out.push(line);
     }
 
     Ok(out.join("\n"))
+}
+
+enum CallItem {
+    Arg(ArgInfo),
+    Comma { newline_after: bool },
+}
+
+struct ArgInfo {
+    formatted: String,
+    is_empty: bool,
+    is_comment_only: bool,
+}
+
+fn collect_call_items(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Vec<CallItem>, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let mut items = Vec::new();
+    for (idx, element) in elements.iter().enumerate() {
+        match element {
+            NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                let formatted = format_arg(arg, indent, ctx)?;
+                let is_empty = formatted.is_empty();
+                let is_comment_only = is_comment_only_arg(arg);
+                items.push(CallItem::Arg(ArgInfo {
+                    formatted,
+                    is_empty,
+                    is_comment_only,
+                }));
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
+                let mut newline_after = false;
+                for next in elements.iter().skip(idx + 1) {
+                    match next {
+                        NodeOrToken::Token(t) if t.kind() == SyntaxKind::NEWLINE => {
+                            newline_after = true;
+                        }
+                        NodeOrToken::Token(t)
+                            if t.kind() == SyntaxKind::WHITESPACE
+                                || t.kind() == SyntaxKind::COMMENT => {}
+                        NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG => break,
+                        NodeOrToken::Token(t) if t.kind() == SyntaxKind::COMMA => break,
+                        _ => break,
+                    }
+                }
+                items.push(CallItem::Comma { newline_after });
+            }
+            _ => {}
+        }
+    }
+    Ok(items)
 }
 
 struct CallArgParts {
@@ -114,7 +204,6 @@ struct CallArgParts {
     comma_count: usize,
     has_non_empty_arg: bool,
     has_comment_arg: bool,
-    comment_arg_mask: Vec<bool>,
 }
 
 fn collect_call_arg_parts(
@@ -146,7 +235,6 @@ fn collect_call_arg_parts(
         comma_count,
         has_non_empty_arg,
         has_comment_arg,
-        comment_arg_mask,
     })
 }
 

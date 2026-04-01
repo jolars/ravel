@@ -549,6 +549,7 @@ fn parse_call_expr(
     let mut i = lparen_idx + 1;
 
     let mut expect_delimiter = false;
+    let mut last_arg_was_comment_only = false;
     loop {
         // Skip whitespace and newlines within the argument list.
         let next_i = ctx.skip_ws_and_newlines(i);
@@ -567,7 +568,10 @@ fn parse_call_expr(
             && !had_newline_gap
             && let Some(tok) = tokens.get(i)
         {
-            push_token_diagnostic(diagnostics, "expected ',' between arguments", tok);
+            let current_is_comment = tok.kind == TokKind::Comment;
+            if !current_is_comment && !last_arg_was_comment_only {
+                push_token_diagnostic(diagnostics, "expected ',' between arguments", tok);
+            }
         }
 
         // Empty argument (leading or consecutive comma).
@@ -577,10 +581,12 @@ fn parse_call_expr(
             events.push(Event::Tok(i)); // ,
             i += 1;
             expect_delimiter = false;
+            last_arg_was_comment_only = false;
             continue;
         }
 
         events.push(Event::Start(SyntaxKind::ARG));
+        last_arg_was_comment_only = false;
 
         if is_named_arg(ctx, i) {
             // Named argument: ident = expr
@@ -603,12 +609,18 @@ fn parse_call_expr(
         } else {
             // Positional argument.
             if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+                last_arg_was_comment_only = arg.end == arg.start + 1
+                    && matches!(
+                        tokens.get(arg.start).map(|t| &t.kind),
+                        Some(TokKind::Comment)
+                    );
                 for idx in i..arg.start {
                     events.push(Event::Tok(idx));
                 }
                 events.extend(arg.events);
                 i = arg.end;
             } else {
+                last_arg_was_comment_only = false;
                 events.push(Event::Tok(i));
                 i += 1;
             }
@@ -628,6 +640,7 @@ fn parse_call_expr(
             events.push(Event::Tok(i)); // ,
             i += 1;
             expect_delimiter = false;
+            last_arg_was_comment_only = false;
         }
     }
 
