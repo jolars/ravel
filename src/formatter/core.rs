@@ -120,6 +120,9 @@ fn format_line(
         .filter(|el| !is_trivia(el.kind()))
         .cloned()
         .collect();
+    if significant.is_empty() {
+        return Ok(String::new());
+    }
 
     if let [NodeOrToken::Token(token)] = significant.as_slice()
         && token.kind() == SyntaxKind::COMMENT
@@ -189,6 +192,7 @@ fn format_expr_node(
         SyntaxKind::CALL_EXPR => format_call_expr(node, indent, ctx),
         SyntaxKind::IF_EXPR => format_if_expr(node, indent, ctx),
         SyntaxKind::BLOCK_EXPR => format_block_expr(node, indent, ctx),
+        SyntaxKind::FUNCTION_EXPR => format_function_expr(node, indent, ctx),
         kind => Err(FormatError::UnsupportedConstruct {
             kind,
             snippet: node.text().to_string(),
@@ -585,6 +589,140 @@ fn format_block_expr(
     Ok(out)
 }
 
+fn format_function_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let fn_idx = elements
+        .iter()
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::FUNCTION_KW
+            )
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing 'function' keyword",
+            snippet: node.text().to_string(),
+        })?;
+    let lparen_idx = elements
+        .iter()
+        .enumerate()
+        .skip(fn_idx + 1)
+        .find_map(|(i, el)| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN => Some(i),
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '(' in function expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let mut depth = 0;
+    let rparen_idx = elements
+        .iter()
+        .enumerate()
+        .skip(lparen_idx)
+        .find_map(|(i, el)| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN => {
+                depth += 1;
+                None
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RPAREN => {
+                depth -= 1;
+                if depth == 0 { Some(i) } else { None }
+            }
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing ')' in function expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let params = format_function_parameters(&elements[lparen_idx + 1..rparen_idx], indent, ctx)?;
+    let body = format_expr_segment(&elements[rparen_idx + 1..], "function body", indent, ctx)?;
+    Ok(format!("function({params}) {body}"))
+}
+
+fn format_function_parameters(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if significant.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut params: Vec<Vec<SyntaxElement<RLanguage>>> = Vec::new();
+    let mut current: Vec<SyntaxElement<RLanguage>> = Vec::new();
+    let mut depth = 0usize;
+
+    for element in significant {
+        match &element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA && depth == 0 => {
+                if current.is_empty() {
+                    return Err(FormatError::AmbiguousConstruct {
+                        context: "empty function parameter",
+                        snippet: tok.text().to_string(),
+                    });
+                }
+                params.push(std::mem::take(&mut current));
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::LPAREN
+                        | SyntaxKind::LBRACE
+                        | SyntaxKind::LBRACK
+                        | SyntaxKind::LBRACK2
+                ) =>
+            {
+                depth += 1;
+                current.push(element);
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::RPAREN
+                        | SyntaxKind::RBRACE
+                        | SyntaxKind::RBRACK
+                        | SyntaxKind::RBRACK2
+                ) =>
+            {
+                depth = depth.saturating_sub(1);
+                current.push(element);
+            }
+            _ => current.push(element),
+        }
+    }
+
+    if current.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "trailing comma in function parameters",
+            snippet: snippet_from_elements(elements),
+        });
+    }
+    params.push(current);
+
+    let mut out = Vec::with_capacity(params.len());
+    for param in params {
+        out.push(format_expr_segment(
+            &param,
+            "function parameter",
+            indent,
+            ctx,
+        )?);
+    }
+    Ok(out.join(", "))
+}
+
 fn format_atom_token(token: &SyntaxToken<RLanguage>) -> Result<String, FormatError> {
     match token.kind() {
         SyntaxKind::IDENT
@@ -605,6 +743,7 @@ fn split_lines(
 ) -> Result<Vec<Vec<SyntaxElement<RLanguage>>>, FormatError> {
     let mut lines: Vec<Vec<SyntaxElement<RLanguage>>> = Vec::new();
     let mut current: Vec<SyntaxElement<RLanguage>> = Vec::new();
+    let mut break_count = 0usize;
 
     for element in elements {
         if let NodeOrToken::Token(token) = &element {
@@ -614,10 +753,21 @@ fn split_lines(
             if token.kind() == SyntaxKind::NEWLINE || token.kind() == SyntaxKind::SEMICOLON {
                 if !current.is_empty() {
                     lines.push(std::mem::take(&mut current));
+                    break_count = 1;
+                } else if !lines.is_empty() {
+                    break_count += 1;
                 }
                 continue;
             }
         }
+
+        if break_count >= 2
+            && (!matches!(lines.last(), Some(last) if is_comment_only_line(last))
+                || matches!(element, NodeOrToken::Token(ref tok) if tok.kind() == SyntaxKind::COMMENT))
+        {
+            lines.push(Vec::new());
+        }
+        break_count = 0;
 
         if !current.is_empty() {
             if matches!(element, NodeOrToken::Token(ref tok) if tok.kind() == SyntaxKind::COMMENT)
@@ -684,4 +834,12 @@ fn format_expr_with_optional_comment(
 
 fn is_trivia(kind: SyntaxKind) -> bool {
     matches!(kind, SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE)
+}
+
+fn is_comment_only_line(line: &[SyntaxElement<RLanguage>]) -> bool {
+    let significant: Vec<_> = line.iter().filter(|el| !is_trivia(el.kind())).collect();
+    matches!(
+        significant.as_slice(),
+        [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::COMMENT
+    )
 }

@@ -53,6 +53,7 @@ fn fixture_names() -> &'static [&'static str] {
         "noop_if_else_block",
         "noop_comments",
         "noop_unary",
+        "program",
     ]
 }
 
