@@ -68,6 +68,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_named_args_without_rhs",
         "call_trailing_curly_curly",
         "call_empty_lines_between_args",
+        "call_comments_basic",
     ]
 }
 
