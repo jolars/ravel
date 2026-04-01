@@ -74,6 +74,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_leading_holes_hugging",
         "call_subsetting_hugging",
         "function_definition_misc",
+        "function_definition_autobracing",
     ]
 }
 

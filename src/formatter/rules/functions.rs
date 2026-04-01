@@ -629,7 +629,7 @@ fn try_format_call_with_trailing_function(
     let Some((last, leading)) = parts.arg_infos.split_last() else {
         return Ok(None);
     };
-    if !last.formatted.starts_with("function(") {
+    if !(last.formatted.starts_with("function(") || last.formatted.starts_with("\\(")) {
         return Ok(None);
     }
     if leading.iter().any(|arg| arg.formatted.contains('\n')) {
@@ -949,6 +949,10 @@ pub(crate) fn format_function_expr(
             context: "missing 'function' keyword",
             snippet: node.text().to_string(),
         })?;
+    let function_head = match &elements[fn_idx] {
+        NodeOrToken::Token(tok) if tok.text() == "\\" => "\\",
+        _ => "function",
+    };
     let lparen_idx = elements
         .iter()
         .enumerate()
@@ -986,7 +990,6 @@ pub(crate) fn format_function_expr(
     let params = format_function_parameters(&elements[lparen_idx + 1..rparen_idx], indent, ctx)?;
     let body_elements = &elements[rparen_idx + 1..];
     let body = format_expr_segment(body_elements, "function body", indent, ctx)?;
-
     let body_significant: Vec<_> = body_elements
         .iter()
         .filter(|el| !super::super::core::is_trivia(el.kind()))
@@ -996,23 +999,14 @@ pub(crate) fn format_function_expr(
         body_significant.as_slice(),
         [NodeOrToken::Node(n)] if n.kind() == SyntaxKind::BLOCK_EXPR
     );
-    let has_newline_gap_after_params = body_elements
-        .iter()
-        .take_while(|el| !matches!(el, NodeOrToken::Node(_)))
-        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE));
-
-    let inline = format!("function({params}) {body}");
-    if body_is_block
-        || (!params.contains('\n')
-            && !has_newline_gap_after_params
-            && ctx.fits_with_newlines(indent, &inline))
-    {
+    let inline = format!("{function_head}({params}) {body}");
+    if body_is_block || (!params.contains('\n') && ctx.fits_with_newlines(indent, &inline)) {
         return Ok(inline);
     }
 
     let body_line = format_expr_segment(body_elements, "function body", indent + 1, ctx)?;
     Ok(format!(
-        "function({params}) {{\n{}{}\n{}}}",
+        "{function_head}({params}) {{\n{}{}\n{}}}",
         ctx.indent_text(indent + 1),
         body_line,
         ctx.indent_text(indent)

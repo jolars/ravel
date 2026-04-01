@@ -1,8 +1,8 @@
-map(xs, function(x) {
+map(xs, \(x) {
   x + 1
 })
 
-map(xs, function(x) {
+map(xs, \(x) {
   x + 1
 })
 
@@ -61,9 +61,7 @@ map(
   function(my_long_argument) my_long_argument + my_extra_long_extra_argument
 )
 
-map(xs, function(x, option = "a") {
-  x
-})
+map(xs, function(x, option = "a") x)
 
 map(xs, function(x, option = "a") {
   x
