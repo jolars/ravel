@@ -2,6 +2,10 @@ use rowan::{NodeOrToken, SyntaxElement, SyntaxToken};
 
 use super::context::FormatContext;
 use super::style::FormatStyle;
+use crate::ast::{
+    AssignmentExpr, AstNode, BinaryExpr, BlockExpr, CallExpr, ForExpr, FunctionExpr, IfExpr,
+    ParenExpr, UnaryExpr,
+};
 use crate::parser::parse;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
@@ -196,21 +200,38 @@ fn format_expr_node(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<String, FormatError> {
-    match node.kind() {
-        SyntaxKind::ASSIGNMENT_EXPR => format_assignment_expr(node, indent, ctx),
-        SyntaxKind::UNARY_EXPR => format_unary_expr(node, indent, ctx),
-        SyntaxKind::BINARY_EXPR => format_binary_expr(node, indent, ctx),
-        SyntaxKind::PAREN_EXPR => format_paren_expr(node, indent, ctx),
-        SyntaxKind::CALL_EXPR => format_call_expr(node, indent, ctx),
-        SyntaxKind::IF_EXPR => format_if_expr(node, indent, ctx),
-        SyntaxKind::FOR_EXPR => format_for_expr(node, indent, ctx),
-        SyntaxKind::BLOCK_EXPR => format_block_expr(node, indent, ctx),
-        SyntaxKind::FUNCTION_EXPR => format_function_expr(node, indent, ctx),
-        kind => Err(FormatError::UnsupportedConstruct {
-            kind,
-            snippet: node.text().to_string(),
-        }),
+    if let Some(expr) = AssignmentExpr::cast(node.clone()) {
+        return format_assignment_expr(expr.syntax(), indent, ctx);
     }
+    if let Some(expr) = UnaryExpr::cast(node.clone()) {
+        return format_unary_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = BinaryExpr::cast(node.clone()) {
+        return format_binary_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = ParenExpr::cast(node.clone()) {
+        return format_paren_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = CallExpr::cast(node.clone()) {
+        return format_call_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = IfExpr::cast(node.clone()) {
+        return format_if_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = ForExpr::cast(node.clone()) {
+        return format_for_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = BlockExpr::cast(node.clone()) {
+        return format_block_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = FunctionExpr::cast(node.clone()) {
+        return format_function_expr(expr.syntax(), indent, ctx);
+    }
+
+    Err(FormatError::UnsupportedConstruct {
+        kind: node.kind(),
+        snippet: node.text().to_string(),
+    })
 }
 
 fn format_unary_expr(
