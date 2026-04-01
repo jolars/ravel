@@ -33,9 +33,10 @@ pub(crate) fn format_call_expr(
             snippet: node.text().to_string(),
         })?;
 
-    let formatted_args = format_arg_list(&arg_list, indent, ctx)?;
+    let parts = collect_call_arg_parts(&arg_list, indent, ctx)?;
+    let formatted_args = format_arg_list_from_parts(&parts, &arg_list)?;
     let inline = format!("{callee}({formatted_args})");
-    if ctx.fits_inline(indent, &inline) {
+    if !parts.has_comment_arg && ctx.fits_inline(indent, &inline) {
         return Ok(inline);
     }
 
@@ -46,21 +47,19 @@ pub(crate) fn format_call_expr(
     ))
 }
 
-fn format_arg_list(
+fn format_arg_list_from_parts(
+    node_parts: &CallArgParts,
     node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
 ) -> Result<String, FormatError> {
-    let parts = collect_call_arg_parts(node, indent, ctx)?;
-    if parts.formatted_args.is_empty() {
+    if node_parts.formatted_args.is_empty() {
         return Ok(String::new());
     }
 
-    if !parts.has_non_empty_arg {
-        return Ok(",".repeat(parts.comma_count));
+    if !node_parts.has_non_empty_arg {
+        return Ok(",".repeat(node_parts.comma_count));
     }
 
-    let first_non_empty = parts
+    let first_non_empty = node_parts
         .formatted_args
         .iter()
         .position(|arg| !arg.is_empty())
@@ -70,9 +69,9 @@ fn format_arg_list(
         })?;
 
     let mut out = String::new();
-    for (idx, arg) in parts.formatted_args.iter().enumerate() {
+    for (idx, arg) in node_parts.formatted_args.iter().enumerate() {
         out.push_str(arg);
-        if idx < parts.comma_count {
+        if idx < node_parts.comma_count {
             if idx + 1 < first_non_empty {
                 out.push(',');
             } else {
@@ -97,6 +96,11 @@ fn format_arg_list_multiline(
     for (idx, formatted) in parts.formatted_args.iter().enumerate() {
         let mut line = format!("{}{}", ctx.indent_text(indent + 1), formatted);
         if idx < parts.comma_count {
+            if parts.comment_arg_mask.get(idx).copied().unwrap_or(false) && !formatted.is_empty() {
+                out.push(line);
+                out.push(format!("{},", ctx.indent_text(indent + 1)));
+                continue;
+            }
             line.push(',');
         }
         out.push(line);
@@ -109,6 +113,8 @@ struct CallArgParts {
     formatted_args: Vec<String>,
     comma_count: usize,
     has_non_empty_arg: bool,
+    has_comment_arg: bool,
+    comment_arg_mask: Vec<bool>,
 }
 
 fn collect_call_arg_parts(
@@ -117,11 +123,13 @@ fn collect_call_arg_parts(
     ctx: FormatContext,
 ) -> Result<CallArgParts, FormatError> {
     let mut formatted_args = Vec::new();
+    let mut comment_arg_mask = Vec::new();
     let mut comma_count = 0usize;
 
     for element in node.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                comment_arg_mask.push(is_comment_only_arg(&arg));
                 formatted_args.push(format_arg(&arg, indent, ctx)?);
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -132,11 +140,25 @@ fn collect_call_arg_parts(
     }
 
     let has_non_empty_arg = formatted_args.iter().any(|arg| !arg.is_empty());
+    let has_comment_arg = comment_arg_mask.iter().any(|is_comment| *is_comment);
     Ok(CallArgParts {
         formatted_args,
         comma_count,
         has_non_empty_arg,
+        has_comment_arg,
+        comment_arg_mask,
     })
+}
+
+fn is_comment_only_arg(node: &SyntaxNode) -> bool {
+    let significant: Vec<_> = node
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    matches!(
+        significant.as_slice(),
+        [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::COMMENT
+    )
 }
 
 fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<String, FormatError> {
@@ -144,6 +166,17 @@ fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<St
     if elements.is_empty() {
         return Ok(String::new());
     }
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if let [NodeOrToken::Token(tok)] = significant.as_slice()
+        && tok.kind() == SyntaxKind::COMMENT
+    {
+        return Ok(tok.text().to_string());
+    }
+
     if let Some(eq_idx) = elements
         .iter()
         .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))

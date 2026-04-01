@@ -59,6 +59,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_basic_and_holes",
         "call_dots_and_dotdoti",
         "call_user_line_breaks",
+        "call_leading_holes",
     ]
 }
 
