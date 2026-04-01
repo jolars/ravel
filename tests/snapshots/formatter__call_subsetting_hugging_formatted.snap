@@ -1,0 +1,11 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+foo(bar[1, 2])
+
+foo[[bar(1, 2)]]
+
+foo[[bar(1, 2)]]
+
+foo[[bar(1, 2)]]

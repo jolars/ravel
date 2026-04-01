@@ -7,7 +7,8 @@ use super::rules::control_flow::{
     try_format_for_with_external_body, try_format_while_with_external_body,
 };
 use super::rules::expressions::{
-    format_assignment_expr, format_binary_expr, format_paren_expr, format_unary_expr,
+    format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
+    format_unary_expr,
 };
 use super::rules::functions::{format_call_expr, format_function_expr};
 use super::style::FormatStyle;
@@ -88,14 +89,7 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
         let kind = token.kind();
         if matches!(
             kind,
-            SyntaxKind::USER_OP
-                | SyntaxKind::LBRACK
-                | SyntaxKind::RBRACK
-                | SyntaxKind::LBRACK2
-                | SyntaxKind::RBRACK2
-                | SyntaxKind::DOLLAR
-                | SyntaxKind::AT
-                | SyntaxKind::ERROR
+            SyntaxKind::USER_OP | SyntaxKind::DOLLAR | SyntaxKind::AT | SyntaxKind::ERROR
         ) {
             return Err(FormatError::UnsupportedConstruct {
                 kind,
@@ -218,6 +212,12 @@ fn format_expr_node(
     }
     if let Some(expr) = CallExpr::cast(node.clone()) {
         return format_call_expr(expr.syntax(), indent, ctx);
+    }
+    if matches!(
+        node.kind(),
+        SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
+    ) {
+        return format_subset_expr(node, indent, ctx);
     }
     if let Some(expr) = IfExpr::cast(node.clone()) {
         return format_if_expr(expr.syntax(), indent, ctx);

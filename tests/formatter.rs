@@ -72,6 +72,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_hugging_basics",
         "call_comments_sanity",
         "call_leading_holes_hugging",
+        "call_subsetting_hugging",
     ]
 }
 

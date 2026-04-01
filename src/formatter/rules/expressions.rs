@@ -184,3 +184,106 @@ pub(crate) fn format_paren_expr(
     )?;
     Ok(format!("({inner})"))
 }
+
+pub(crate) fn format_subset_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let (open_kind, close_kind) = match node.kind() {
+        SyntaxKind::SUBSET_EXPR => (SyntaxKind::LBRACK, SyntaxKind::RBRACK),
+        SyntaxKind::SUBSET2_EXPR => (SyntaxKind::LBRACK2, SyntaxKind::RBRACK2),
+        _ => {
+            return Err(FormatError::AmbiguousConstruct {
+                context: "subset formatter called on non-subset node",
+                snippet: node.text().to_string(),
+            });
+        }
+    };
+    let open_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == open_kind))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing opening bracket in subset expression",
+            snippet: node.text().to_string(),
+        })?;
+    let close_idx = elements
+        .iter()
+        .rposition(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == close_kind))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing closing bracket in subset expression",
+            snippet: node.text().to_string(),
+        })?;
+    if close_idx <= open_idx {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "invalid subset bounds",
+            snippet: node.text().to_string(),
+        });
+    }
+
+    let target = format_expr_segment(&elements[..open_idx], "subset target", indent, ctx)?;
+    let arg_list = elements
+        .iter()
+        .find_map(|el| match el {
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG_LIST => Some(n.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing arg list in subset expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let args = format_subset_args_inline(&arg_list, indent, ctx)?;
+    let open = match open_kind {
+        SyntaxKind::LBRACK => "[",
+        SyntaxKind::LBRACK2 => "[[",
+        _ => unreachable!(),
+    };
+    let close = match close_kind {
+        SyntaxKind::RBRACK => "]",
+        SyntaxKind::RBRACK2 => "]]",
+        _ => unreachable!(),
+    };
+    Ok(format!("{target}{open}{args}{close}"))
+}
+
+fn format_subset_args_inline(
+    arg_list: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let mut args = Vec::new();
+    let mut commas = 0usize;
+    for element in arg_list.children_with_tokens() {
+        match element {
+            NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                let arg_elements: Vec<_> = arg.children_with_tokens().collect();
+                if arg_elements.is_empty() {
+                    args.push(String::new());
+                } else {
+                    args.push(format_expr_segment(
+                        &arg_elements,
+                        "subset argument",
+                        indent,
+                        ctx,
+                    )?);
+                }
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => commas += 1,
+            _ => {}
+        }
+    }
+
+    if args.is_empty() {
+        return Ok(String::new());
+    }
+    let mut out = String::new();
+    for (idx, arg) in args.iter().enumerate() {
+        out.push_str(arg);
+        if idx < commas {
+            out.push_str(", ");
+        }
+    }
+    Ok(out.trim_end().to_string())
+}
