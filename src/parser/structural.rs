@@ -18,6 +18,17 @@ fn skip_for_clause_trivia(tokens: &[Token], mut i: usize) -> usize {
     i
 }
 
+fn skip_while_clause_trivia(tokens: &[Token], mut i: usize) -> usize {
+    let ctx = ParserCtx::new(tokens);
+    while matches!(
+        ctx.token(i).map(|t| &t.kind),
+        Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+    ) {
+        i += 1;
+    }
+    i
+}
+
 pub(crate) fn parse_if_expr(
     tokens: &[Token],
     start: usize,
@@ -37,7 +48,7 @@ pub(crate) fn parse_if_expr(
         push_range(&mut events, cursor, cond_start);
         events.push(Event::Tok(cond_start));
         cursor = cond_start + 1;
-        cond_start = cursor;
+        cond_start = skip_while_clause_trivia(tokens, cursor);
         saw_lparen = true;
     } else {
         push_token_diagnostic(diagnostics, "expected '(' after 'if'", if_tok);
@@ -130,7 +141,7 @@ pub(crate) fn parse_while_expr(
     let while_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::WHILE_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let mut cond_start = ctx.skip_ws_and_newlines(cursor);
+    let mut cond_start = skip_while_clause_trivia(tokens, cursor);
     let mut saw_lparen = false;
 
     if matches!(
@@ -140,7 +151,7 @@ pub(crate) fn parse_while_expr(
         push_range(&mut events, cursor, cond_start);
         events.push(Event::Tok(cond_start));
         cursor = cond_start + 1;
-        cond_start = cursor;
+        cond_start = skip_while_clause_trivia(tokens, cursor);
         saw_lparen = true;
     } else {
         push_token_diagnostic(diagnostics, "expected '(' after 'while'", while_tok);
@@ -163,7 +174,7 @@ pub(crate) fn parse_while_expr(
     }
 
     if saw_lparen {
-        let cond_rparen = ctx.skip_ws_and_newlines(cursor);
+        let cond_rparen = skip_while_clause_trivia(tokens, cursor);
         if matches!(
             tokens.get(cond_rparen).map(|t| &t.kind),
             Some(TokKind::RParen)

@@ -55,6 +55,7 @@ fn fixture_names() -> &'static [&'static str] {
         "noop_unary",
         "program",
         "for_statement",
+        "while_statement",
     ]
 }
 

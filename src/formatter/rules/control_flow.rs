@@ -5,7 +5,7 @@ use super::super::core::{
     FormatError, format_block_expr_with_prefixed_comments, format_expr_element,
     format_expr_segment, is_trivia,
 };
-use crate::ast::{AstNode, ForExpr, ForExprParts, IfExpr};
+use crate::ast::{AstNode, ForExpr, ForExprParts, IfExpr, WhileExpr, WhileExprParts};
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
 pub(crate) fn format_if_expr(
@@ -106,6 +106,41 @@ pub(crate) fn format_for_expr(
     Ok(out)
 }
 
+pub(crate) fn format_while_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let parts = parse_while_expr_parts(node, indent, ctx)?;
+    let header = format_while_header(&parts, indent, ctx)?;
+    let body = format_while_body(
+        parts.body.as_ref(),
+        indent,
+        ctx,
+        &parts
+            .post_clause_comments
+            .iter()
+            .map(|tok| tok.text().to_string())
+            .collect::<Vec<_>>(),
+    )?;
+
+    let mut out = String::new();
+    for comment in &parts.leading_comments {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&ctx.indent_text(indent));
+        out.push_str(comment.text());
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&header);
+    out.push(' ');
+    out.push_str(&body);
+    Ok(out)
+}
+
 pub(crate) fn try_format_for_with_external_body(
     lines: &[Vec<SyntaxElement<RLanguage>>],
     line_idx: usize,
@@ -139,17 +174,15 @@ pub(crate) fn try_format_for_with_external_body(
         break;
     }
 
-    let body_node = if cursor < lines.len() {
+    let body_element = if cursor < lines.len() {
         match significant_elements(&lines[cursor]).as_slice() {
-            [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::BLOCK_EXPR => {
-                Some(node.clone())
-            }
+            [element] => Some(element.clone()),
             _ => None,
         }
     } else {
         None
     };
-    let Some(body_node) = body_node else {
+    let Some(body_element) = body_element else {
         return Ok(None);
     };
 
@@ -159,12 +192,7 @@ pub(crate) fn try_format_for_with_external_body(
         .map(|tok| tok.text().to_string())
         .collect();
     merged_comment_texts.extend(extra_body_comments);
-    let body = format_for_body(
-        Some(&NodeOrToken::Node(body_node)),
-        indent,
-        ctx,
-        &merged_comment_texts,
-    )?;
+    let body = format_for_body(Some(&body_element), indent, ctx, &merged_comment_texts)?;
 
     let mut out = String::new();
     for comment in &parts.leading_comments {
@@ -188,6 +216,81 @@ pub(crate) fn try_format_for_with_external_body(
     Ok(Some((out, cursor - line_idx)))
 }
 
+pub(crate) fn try_format_while_with_external_body(
+    lines: &[Vec<SyntaxElement<RLanguage>>],
+    line_idx: usize,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<(String, usize)>, FormatError> {
+    let significant = significant_elements(&lines[line_idx]);
+    let (while_node, trailing_comment) = match significant.as_slice() {
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::WHILE_EXPR => (node.clone(), None),
+        [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
+            if node.kind() == SyntaxKind::WHILE_EXPR && tok.kind() == SyntaxKind::COMMENT =>
+        {
+            (node.clone(), Some(tok.text().to_string()))
+        }
+        _ => return Ok(None),
+    };
+
+    let parts = parse_while_expr_parts(&while_node, indent, ctx)?;
+    if parts.body.is_some() {
+        return Ok(None);
+    }
+
+    let mut extra_body_comments = Vec::new();
+    let mut cursor = line_idx + 1;
+    while cursor < lines.len() {
+        if let Some(comment) = comment_only_line_text(&lines[cursor]) {
+            extra_body_comments.push(comment);
+            cursor += 1;
+            continue;
+        }
+        break;
+    }
+
+    let body_element = if cursor < lines.len() {
+        match significant_elements(&lines[cursor]).as_slice() {
+            [element] => Some(element.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let Some(body_element) = body_element else {
+        return Ok(None);
+    };
+
+    let mut merged_comment_texts: Vec<String> = parts
+        .post_clause_comments
+        .iter()
+        .map(|tok| tok.text().to_string())
+        .collect();
+    merged_comment_texts.extend(extra_body_comments);
+    let body = format_while_body(Some(&body_element), indent, ctx, &merged_comment_texts)?;
+
+    let mut out = String::new();
+    for comment in &parts.leading_comments {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&ctx.indent_text(indent));
+        out.push_str(comment.text());
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&format_while_header(&parts, indent, ctx)?);
+    out.push(' ');
+    out.push_str(&body);
+    if let Some(comment) = trailing_comment {
+        out.push(' ');
+        out.push_str(&comment);
+    }
+
+    Ok(Some((out, cursor - line_idx)))
+}
+
 pub(crate) fn should_insert_comment_for_gap(
     lines: &[Vec<SyntaxElement<RLanguage>>],
     idx: usize,
@@ -200,10 +303,10 @@ pub(crate) fn should_insert_comment_for_gap(
     if idx >= 3 && is_comment_only_line(&lines[idx - 3]) {
         return Ok(false);
     }
-    if !line_starts_with_for_expr(&lines[idx]) {
+    if !line_starts_with_control_flow_loop(&lines[idx]) {
         return Ok(false);
     }
-    Ok(for_leading_comment_count(&lines[idx], indent, ctx)?.unwrap_or(0) <= 1)
+    Ok(loop_leading_comment_count(&lines[idx], indent, ctx)?.unwrap_or(0) <= 1)
 }
 
 fn parse_for_expr_parts(
@@ -233,7 +336,104 @@ fn format_for_header(
     Ok(format!("for ({variable} in {sequence})"))
 }
 
+fn parse_while_expr_parts(
+    node: &SyntaxNode,
+    _indent: usize,
+    _ctx: FormatContext,
+) -> Result<WhileExprParts, FormatError> {
+    let while_expr =
+        WhileExpr::cast(node.clone()).ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "invalid while expression node",
+            snippet: node.text().to_string(),
+        })?;
+    while_expr
+        .parts()
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "invalid while expression structure",
+            snippet: node.text().to_string(),
+        })
+}
+
+fn format_while_header(
+    parts: &WhileExprParts,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let condition = format_expr_segment(
+        &parts.condition_elements,
+        "while loop condition",
+        indent + 1,
+        ctx,
+    )?;
+
+    if condition.contains('\n') {
+        return Ok(format!(
+            "while (\n{}{}\n{})",
+            ctx.indent_text(indent + 1),
+            condition,
+            ctx.indent_text(indent)
+        ));
+    }
+
+    let inline = format!("while ({condition})");
+    if ctx.fits_inline(indent, &inline) {
+        return Ok(inline);
+    }
+
+    Ok(format!(
+        "while (\n{}{}\n{})",
+        ctx.indent_text(indent + 1),
+        condition,
+        ctx.indent_text(indent)
+    ))
+}
+
 fn format_for_body(
+    body: Option<&SyntaxElement<RLanguage>>,
+    indent: usize,
+    ctx: FormatContext,
+    prefixed_comments: &[String],
+) -> Result<String, FormatError> {
+    match body {
+        Some(NodeOrToken::Node(node)) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+            format_block_expr_with_prefixed_comments(node, indent, ctx, prefixed_comments)
+        }
+        Some(element) => {
+            let expr = format_expr_element(element, indent + 1, ctx)?;
+            let mut out = String::from("{\n");
+            for comment in prefixed_comments {
+                out.push_str(&ctx.indent_text(indent + 1));
+                out.push_str(comment);
+                out.push('\n');
+            }
+            out.push_str(&ctx.indent_text(indent + 1));
+            out.push_str(&expr);
+            out.push('\n');
+            out.push_str(&ctx.indent_text(indent));
+            out.push('}');
+            Ok(out)
+        }
+        None => {
+            if prefixed_comments.is_empty() {
+                return Ok("{}".to_string());
+            }
+            let mut out = String::from("{\n");
+            for (idx, comment) in prefixed_comments.iter().enumerate() {
+                out.push_str(&ctx.indent_text(indent + 1));
+                out.push_str(comment);
+                if idx + 1 < prefixed_comments.len() {
+                    out.push('\n');
+                }
+            }
+            out.push('\n');
+            out.push_str(&ctx.indent_text(indent));
+            out.push('}');
+            Ok(out)
+        }
+    }
+}
+
+fn format_while_body(
     body: Option<&SyntaxElement<RLanguage>>,
     indent: usize,
     ctx: FormatContext,
@@ -302,38 +502,59 @@ fn is_comment_only_line(line: &[SyntaxElement<RLanguage>]) -> bool {
     )
 }
 
-fn line_starts_with_for_expr(line: &[SyntaxElement<RLanguage>]) -> bool {
+fn line_starts_with_control_flow_loop(line: &[SyntaxElement<RLanguage>]) -> bool {
     let significant = significant_elements(line);
     match significant.as_slice() {
-        [NodeOrToken::Node(node)] => node.kind() == SyntaxKind::FOR_EXPR,
+        [NodeOrToken::Node(node)] => {
+            node.kind() == SyntaxKind::FOR_EXPR || node.kind() == SyntaxKind::WHILE_EXPR
+        }
         [NodeOrToken::Node(node), NodeOrToken::Token(tok)] => {
-            node.kind() == SyntaxKind::FOR_EXPR && tok.kind() == SyntaxKind::COMMENT
+            (node.kind() == SyntaxKind::FOR_EXPR || node.kind() == SyntaxKind::WHILE_EXPR)
+                && tok.kind() == SyntaxKind::COMMENT
         }
         _ => false,
     }
 }
 
-fn for_leading_comment_count(
+fn loop_leading_comment_count(
     line: &[SyntaxElement<RLanguage>],
     indent: usize,
     ctx: FormatContext,
 ) -> Result<Option<usize>, FormatError> {
     let significant = significant_elements(line);
-    let node = match significant.as_slice() {
-        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::FOR_EXPR => Some(node.clone()),
+    let (node, kind) = match significant.as_slice() {
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::FOR_EXPR => {
+            (Some(node.clone()), SyntaxKind::FOR_EXPR)
+        }
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::WHILE_EXPR => {
+            (Some(node.clone()), SyntaxKind::WHILE_EXPR)
+        }
         [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
             if node.kind() == SyntaxKind::FOR_EXPR && tok.kind() == SyntaxKind::COMMENT =>
         {
-            Some(node.clone())
+            (Some(node.clone()), SyntaxKind::FOR_EXPR)
         }
-        _ => None,
+        [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
+            if node.kind() == SyntaxKind::WHILE_EXPR && tok.kind() == SyntaxKind::COMMENT =>
+        {
+            (Some(node.clone()), SyntaxKind::WHILE_EXPR)
+        }
+        _ => (None, SyntaxKind::ERROR),
     };
     let Some(node) = node else {
         return Ok(None);
     };
 
+    if kind == SyntaxKind::FOR_EXPR {
+        return Ok(Some(
+            parse_for_expr_parts(&node, indent, ctx)?
+                .leading_comments
+                .len(),
+        ));
+    }
+
     Ok(Some(
-        parse_for_expr_parts(&node, indent, ctx)?
+        parse_while_expr_parts(&node, indent, ctx)?
             .leading_comments
             .len(),
     ))
