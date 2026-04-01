@@ -93,8 +93,6 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
                 | SyntaxKind::RBRACK
                 | SyntaxKind::LBRACK2
                 | SyntaxKind::RBRACK2
-                | SyntaxKind::COLON2
-                | SyntaxKind::COLON3
                 | SyntaxKind::DOLLAR
                 | SyntaxKind::AT
                 | SyntaxKind::ERROR

@@ -161,10 +161,7 @@ fn parse_expr_with_mode(
         }
 
         if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
-            && matches!(
-                expr_root_kind(&rhs),
-                Some(SyntaxKind::CALL_EXPR | SyntaxKind::BLOCK_EXPR)
-            )
+            && matches!(expr_root_kind(&rhs), Some(SyntaxKind::BLOCK_EXPR))
         {
             push_token_diagnostic(
                 diagnostics,

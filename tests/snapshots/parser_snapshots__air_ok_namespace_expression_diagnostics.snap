@@ -13,14 +13,4 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         start: 20,
         end: 23,
     },
-    ParseDiagnostic {
-        message: "namespace operator requires an identifier on the right-hand side",
-        start: 45,
-        end: 47,
-    },
-    ParseDiagnostic {
-        message: "namespace operator requires an identifier on the right-hand side",
-        start: 52,
-        end: 55,
-    },
 ]

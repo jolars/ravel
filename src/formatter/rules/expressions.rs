@@ -100,6 +100,8 @@ pub(crate) fn format_binary_expr(
                             | SyntaxKind::GREATER_THAN_OR_EQUAL
                             | SyntaxKind::TILDE
                             | SyntaxKind::USER_OP
+                            | SyntaxKind::COLON2
+                            | SyntaxKind::COLON3
                     )
             )
         })
@@ -114,7 +116,14 @@ pub(crate) fn format_binary_expr(
     };
     let lhs = format_expr_segment(&elements[..op_idx], "binary lhs", indent, ctx)?;
     let rhs = format_expr_segment(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
-    let (inline, multiline) = if op_kind == SyntaxKind::CARET || op_kind == SyntaxKind::COLON {
+    if op_kind == SyntaxKind::COLON2 || op_kind == SyntaxKind::COLON3 {
+        return Ok(format!("{lhs}{op_text}{rhs}"));
+    }
+    let (inline, multiline) = if op_kind == SyntaxKind::CARET
+        || op_kind == SyntaxKind::COLON
+        || op_kind == SyntaxKind::COLON2
+        || op_kind == SyntaxKind::COLON3
+    {
         (
             format!("{lhs}{op_text}{rhs}"),
             format!("{lhs}\n{}{}{rhs}", ctx.indent_text(indent + 1), op_text),

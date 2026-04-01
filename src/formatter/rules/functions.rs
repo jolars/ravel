@@ -35,6 +35,14 @@ pub(crate) fn format_call_expr(
 
     let parts = collect_call_arg_parts(&arg_list, indent, ctx)?;
 
+    if !parts.has_non_empty_arg && parts.comma_count == 0 {
+        return Ok(format!("{callee}()"));
+    }
+
+    if let Some(hugged) = try_hug_single_argument_call(&callee, &parts, indent, ctx) {
+        return Ok(hugged);
+    }
+
     if let Some(inline) = try_format_call_with_trailing_function(&callee, &parts, indent, ctx)?
         && !parts.has_comment_arg
         && ctx.fits_with_newlines(indent, &inline)
@@ -60,6 +68,60 @@ pub(crate) fn format_call_expr(
         "{callee}(\n{multiline_args}\n{})",
         ctx.indent_text(indent)
     ))
+}
+
+fn try_hug_single_argument_call(
+    callee: &str,
+    parts: &CallArgParts,
+    indent: usize,
+    ctx: FormatContext,
+) -> Option<String> {
+    if parts.comma_count != 0 || parts.arg_infos.len() != 1 {
+        return None;
+    }
+    let arg = &parts.arg_infos[0];
+    if arg.is_comment_only || arg.formatted.is_empty() {
+        return None;
+    }
+    if arg.formatted.contains(" = ") {
+        return None;
+    }
+    if !arg.formatted.contains('\n') {
+        return None;
+    }
+
+    let normalized = normalize_empty_call_newlines(&arg.formatted);
+    if normalized.trim_start().starts_with('{') || normalized.contains('#') {
+        return None;
+    }
+    if !normalized.contains('\n') {
+        let candidate = format!("{callee}({normalized})");
+        if ctx.fits_with_newlines(indent, &candidate) {
+            return Some(candidate);
+        }
+    }
+
+    Some(format!("{callee}({normalized})"))
+}
+
+fn normalize_empty_call_newlines(formatted: &str) -> String {
+    let lines: Vec<&str> = formatted.lines().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < lines.len() {
+        if i + 2 < lines.len()
+            && lines[i].trim_end().ends_with('(')
+            && lines[i + 1].trim().is_empty()
+            && lines[i + 2].trim() == ")"
+        {
+            out.push(format!("{}{})", lines[i], ""));
+            i += 3;
+            continue;
+        }
+        out.push(lines[i].to_string());
+        i += 1;
+    }
+    out.join("\n")
 }
 
 fn format_arg_list_from_parts(
