@@ -63,6 +63,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_comments_inside_holes",
         "call_comments_after_holes",
         "call_trailing_braced_expression",
+        "call_trailing_inline_function",
     ]
 }
 

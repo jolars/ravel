@@ -92,6 +92,12 @@ fn parse_expr_with_mode(
     ) {
         return parse_function_expr(tokens, start_non_ws, diagnostics);
     }
+    if matches!(
+        tokens.get(start_non_ws).map(|t| &t.kind),
+        Some(TokKind::LambdaFn)
+    ) {
+        return parse_function_expr(tokens, start_non_ws, diagnostics);
+    }
 
     let mut lhs = parse_prefix(&ctx, start, diagnostics, allow_newline_prefix)?;
 
@@ -356,6 +362,7 @@ fn parse_prefix(
         | TokKind::WhileKw
         | TokKind::RepeatKw
         | TokKind::FunctionKw
+        | TokKind::LambdaFn
         | TokKind::InKw
         | TokKind::LBrack
         | TokKind::LBrack2

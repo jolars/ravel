@@ -35,6 +35,13 @@ pub(crate) fn format_call_expr(
 
     let parts = collect_call_arg_parts(&arg_list, indent, ctx)?;
 
+    if let Some(inline) = try_format_call_with_trailing_function(&callee, &parts, indent, ctx)?
+        && !parts.has_comment_arg
+        && ctx.fits_with_newlines(indent, &inline)
+    {
+        return Ok(inline);
+    }
+
     if let Some(inline) = try_format_call_with_trailing_block(&callee, &parts, indent, ctx)?
         && !parts.has_comment_arg
         && ctx.fits_with_newlines(indent, &inline)
@@ -297,6 +304,48 @@ fn try_format_call_with_trailing_block(
     Ok(None)
 }
 
+fn try_format_call_with_trailing_function(
+    callee: &str,
+    parts: &CallArgParts,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<String>, FormatError> {
+    if parts.arg_infos.is_empty() || parts.arg_infos.len() != parts.comma_count + 1 {
+        return Ok(None);
+    }
+    if parts.arg_infos.iter().any(|arg| arg.is_comment_only) {
+        return Ok(None);
+    }
+    if parts.arg_infos.iter().any(|arg| arg.formatted.is_empty()) {
+        return Ok(None);
+    }
+
+    let Some((last, leading)) = parts.arg_infos.split_last() else {
+        return Ok(None);
+    };
+    if !last.formatted.starts_with("function(") {
+        return Ok(None);
+    }
+    if leading.iter().any(|arg| arg.formatted.contains('\n')) {
+        return Ok(None);
+    }
+
+    let inline_leading = leading
+        .iter()
+        .map(|arg| arg.formatted.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let candidate = if inline_leading.is_empty() {
+        format!("{callee}({})", last.formatted)
+    } else {
+        format!("{callee}({inline_leading}, {})", last.formatted)
+    };
+    if ctx.fits_with_newlines(indent, &candidate) {
+        return Ok(Some(candidate));
+    }
+    Ok(None)
+}
+
 fn looks_like_trailing_block_arg(text: &str) -> bool {
     (text.starts_with('{') || text.contains(" = {")) && text.ends_with('}')
 }
@@ -397,8 +446,39 @@ pub(crate) fn format_function_expr(
         })?;
 
     let params = format_function_parameters(&elements[lparen_idx + 1..rparen_idx], indent, ctx)?;
-    let body = format_expr_segment(&elements[rparen_idx + 1..], "function body", indent, ctx)?;
-    Ok(format!("function({params}) {body}"))
+    let body_elements = &elements[rparen_idx + 1..];
+    let body = format_expr_segment(body_elements, "function body", indent, ctx)?;
+
+    let body_significant: Vec<_> = body_elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    let body_is_block = matches!(
+        body_significant.as_slice(),
+        [NodeOrToken::Node(n)] if n.kind() == SyntaxKind::BLOCK_EXPR
+    );
+    let has_newline_gap_after_params = body_elements
+        .iter()
+        .take_while(|el| !matches!(el, NodeOrToken::Node(_)))
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE));
+
+    let inline = format!("function({params}) {body}");
+    if body_is_block
+        || (!params.contains('\n')
+            && !has_newline_gap_after_params
+            && ctx.fits_with_newlines(indent, &inline))
+    {
+        return Ok(inline);
+    }
+
+    let body_line = format_expr_segment(body_elements, "function body", indent + 1, ctx)?;
+    Ok(format!(
+        "function({params}) {{\n{}{}\n{}}}",
+        ctx.indent_text(indent + 1),
+        body_line,
+        ctx.indent_text(indent)
+    ))
 }
 
 fn format_function_parameters(
@@ -467,13 +547,90 @@ fn format_function_parameters(
     params.push(current);
 
     let mut out = Vec::with_capacity(params.len());
-    for param in params {
-        out.push(format_expr_segment(
-            &param,
-            "function parameter",
+    for param in &params {
+        out.push(format_function_parameter(param, indent, ctx)?);
+    }
+    let inline = out.join(", ");
+    if ctx.fits_with_newlines(indent, &format!("function({inline})")) {
+        return Ok(inline);
+    }
+
+    let mut multiline = String::new();
+    multiline.push('\n');
+    for (idx, param) in out.iter().enumerate() {
+        multiline.push_str(&ctx.indent_text(indent + 1));
+        multiline.push_str(param);
+        if idx + 1 < out.len() {
+            multiline.push(',');
+        }
+        multiline.push('\n');
+    }
+    multiline.push_str(&ctx.indent_text(indent));
+    Ok(multiline)
+}
+
+fn format_function_parameter(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    if let Some(eq_idx) = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        let name =
+            format_expr_segment(&elements[..eq_idx], "function parameter name", indent, ctx)?;
+        let value = format_expr_or_braced_tokens(
+            &elements[eq_idx + 1..],
+            "function parameter default",
             indent,
             ctx,
-        )?);
+        )?;
+        return Ok(format!("{name} = {value}"));
     }
-    Ok(out.join(", "))
+
+    format_expr_segment(elements, "function parameter", indent, ctx)
+}
+
+fn format_expr_or_braced_tokens(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if significant.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context,
+            snippet: snippet_from_elements(elements),
+        });
+    }
+
+    let is_token_braced = matches!(
+        significant.first(),
+        Some(NodeOrToken::Token(tok)) if tok.kind() == SyntaxKind::LBRACE
+    ) && matches!(
+        significant.last(),
+        Some(NodeOrToken::Token(tok)) if tok.kind() == SyntaxKind::RBRACE
+    );
+    if !is_token_braced {
+        return format_expr_with_optional_comment(elements, context, indent, ctx);
+    }
+
+    if significant.len() == 2 {
+        return Ok("{}".to_string());
+    }
+
+    let inner = &significant[1..significant.len() - 1];
+    let inner_text = format_expr_with_optional_comment(inner, context, indent + 1, ctx)?;
+    Ok(format!(
+        "{{\n{}{}\n{}}}",
+        ctx.indent_text(indent + 1),
+        inner_text,
+        ctx.indent_text(indent)
+    ))
 }

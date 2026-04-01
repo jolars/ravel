@@ -1,0 +1,68 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..65
+  CALL_EXPR@0..25
+    IDENT@0..3 "map"
+    LPAREN@3..4 "("
+    ARG_LIST@4..24
+      ARG@4..6
+        IDENT@4..6 "xs"
+      COMMA@6..7 ","
+      WHITESPACE@7..8 " "
+      ARG@8..24
+        FUNCTION_EXPR@8..24
+          FUNCTION_KW@8..9 "\\"
+          LPAREN@9..10 "("
+          IDENT@10..11 "x"
+          RPAREN@11..12 ")"
+          WHITESPACE@12..13 " "
+          BLOCK_EXPR@13..24
+            LBRACE@13..14 "{"
+            NEWLINE@14..15 "\n"
+            WHITESPACE@15..17 "  "
+            BINARY_EXPR@17..22
+              IDENT@17..18 "x"
+              WHITESPACE@18..19 " "
+              PLUS@19..20 "+"
+              WHITESPACE@20..21 " "
+              INT@21..22 "1"
+            NEWLINE@22..23 "\n"
+            RBRACE@23..24 "}"
+    RPAREN@24..25 ")"
+  NEWLINE@25..26 "\n"
+  NEWLINE@26..27 "\n"
+  CALL_EXPR@27..64
+    IDENT@27..30 "map"
+    LPAREN@30..31 "("
+    ARG_LIST@31..63
+      ARG@31..33
+        IDENT@31..33 "xs"
+      COMMA@33..34 ","
+      WHITESPACE@34..35 " "
+      ARG@35..63
+        IDENT@35..37 ".f"
+        WHITESPACE@37..38 " "
+        ASSIGN_EQ@38..39 "="
+        WHITESPACE@39..40 " "
+        FUNCTION_EXPR@40..63
+          FUNCTION_KW@40..48 "function"
+          LPAREN@48..49 "("
+          IDENT@49..50 "x"
+          RPAREN@50..51 ")"
+          WHITESPACE@51..52 " "
+          BLOCK_EXPR@52..63
+            LBRACE@52..53 "{"
+            NEWLINE@53..54 "\n"
+            WHITESPACE@54..56 "  "
+            BINARY_EXPR@56..61
+              IDENT@56..57 "x"
+              WHITESPACE@57..58 " "
+              PLUS@58..59 "+"
+              WHITESPACE@59..60 " "
+              INT@60..61 "1"
+            NEWLINE@61..62 "\n"
+            RBRACE@62..63 "}"
+    RPAREN@63..64 ")"
+  NEWLINE@64..65 "\n"

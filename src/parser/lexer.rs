@@ -11,6 +11,7 @@ pub(crate) enum TokKind {
     WhileKw,
     RepeatKw,
     FunctionKw,
+    LambdaFn,
     InKw,
     Tilde,
     UserOp,
@@ -195,6 +196,15 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 });
                 i += 1;
             }
+            '\\' => {
+                out.push(Token {
+                    kind: TokKind::LambdaFn,
+                    text: "\\".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
             ')' => {
                 out.push(Token {
                     kind: TokKind::RParen,
@@ -309,6 +319,28 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 }
 
                 if c == '.' {
+                    if i + 1 < bytes.len() {
+                        let next = bytes[i + 1] as char;
+                        if next.is_ascii_alphabetic() || next == '_' {
+                            let start = i;
+                            i += 2;
+                            while i < bytes.len() {
+                                let ch = bytes[i] as char;
+                                if !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '.') {
+                                    break;
+                                }
+                                i += 1;
+                            }
+                            out.push(Token {
+                                kind: TokKind::Ident,
+                                text: input[start..i].to_string(),
+                                start,
+                                end: i,
+                            });
+                            continue;
+                        }
+                    }
+
                     if i + 2 < bytes.len()
                         && (bytes[i + 1] as char) == '.'
                         && (bytes[i + 2] as char) == '.'
@@ -895,5 +927,19 @@ mod tests {
         assert_eq!(sig[1].text, "..1");
         assert_eq!(sig[2].kind, TokKind::Ident);
         assert_eq!(sig[2].text, "..123");
+    }
+
+    #[test]
+    fn lexes_lambda_fn_and_dot_prefixed_ident() {
+        let tokens = lex("\\(x) .f");
+        let sig: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+        assert_eq!(sig.len(), 5);
+        assert_eq!(sig[0].kind, TokKind::LambdaFn);
+        assert_eq!(sig[0].text, "\\");
+        assert_eq!(sig[4].kind, TokKind::Ident);
+        assert_eq!(sig[4].text, ".f");
     }
 }

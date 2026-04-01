@@ -364,6 +364,7 @@ pub(crate) fn parse_function_expr(
     let mut events = vec![Event::Start(SyntaxKind::FUNCTION_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
     let params_lparen = ctx.skip_ws_and_newlines(cursor);
+    let function_like = matches!(function_tok.kind, TokKind::FunctionKw | TokKind::LambdaFn);
 
     if matches!(
         tokens.get(params_lparen).map(|t| &t.kind),
@@ -405,7 +406,12 @@ pub(crate) fn parse_function_expr(
             cursor = recovery;
         }
     } else {
-        push_token_diagnostic(diagnostics, "expected '(' after 'function'", function_tok);
+        let message = if function_like {
+            "expected '(' after function"
+        } else {
+            "expected '(' after 'function'"
+        };
+        push_token_diagnostic(diagnostics, message, function_tok);
         push_range(&mut events, cursor, params_lparen);
         cursor = params_lparen;
     }

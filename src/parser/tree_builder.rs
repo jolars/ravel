@@ -66,6 +66,7 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::WhileKw => SyntaxKind::WHILE_KW,
         TokKind::RepeatKw => SyntaxKind::REPEAT_KW,
         TokKind::FunctionKw => SyntaxKind::FUNCTION_KW,
+        TokKind::LambdaFn => SyntaxKind::FUNCTION_KW,
         TokKind::InKw => SyntaxKind::IN_KW,
         TokKind::LBrace => SyntaxKind::LBRACE,
         TokKind::RBrace => SyntaxKind::RBRACE,
