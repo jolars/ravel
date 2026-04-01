@@ -505,7 +505,13 @@ fn is_named_arg(ctx: &ParserCtx<'_>, i: usize) -> bool {
     if !matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Ident)) {
         return false;
     }
-    let next = ctx.skip_ws(i + 1);
+    let mut next = i + 1;
+    while matches!(
+        tokens.get(next).map(|t| &t.kind),
+        Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+    ) {
+        next += 1;
+    }
     matches!(tokens.get(next).map(|t| &t.kind), Some(TokKind::AssignEq))
 }
 
@@ -598,9 +604,21 @@ fn parse_call_expr(
         if is_named_arg(ctx, i) {
             // Named argument: ident = expr
             events.push(Event::Tok(i)); // ident
-            let eq_idx = ctx.skip_ws(i + 1);
+            let mut eq_idx = i + 1;
+            while matches!(
+                tokens.get(eq_idx).map(|t| &t.kind),
+                Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+            ) {
+                eq_idx += 1;
+            }
             for idx in (i + 1)..eq_idx {
                 events.push(Event::Tok(idx));
+            }
+            if !matches!(tokens.get(eq_idx).map(|t| &t.kind), Some(TokKind::AssignEq)) {
+                events.push(Event::Finish); // ARG
+                expect_delimiter = true;
+                i = eq_idx;
+                continue;
             }
             events.push(Event::Tok(eq_idx)); // =
             let val_start = eq_idx + 1;
@@ -611,7 +629,15 @@ fn parse_call_expr(
             ) {
                 value_idx += 1;
             }
-            if let Some(val) = parse_expr(tokens, value_idx, 0, diagnostics) {
+            if matches!(
+                tokens.get(value_idx).map(|t| &t.kind),
+                Some(TokKind::Comma | TokKind::RParen) | None
+            ) {
+                for idx in val_start..value_idx {
+                    events.push(Event::Tok(idx));
+                }
+                i = value_idx;
+            } else if let Some(val) = parse_expr(tokens, value_idx, 0, diagnostics) {
                 for idx in val_start..val.start {
                     events.push(Event::Tok(idx));
                 }

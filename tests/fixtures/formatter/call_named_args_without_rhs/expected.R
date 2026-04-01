@@ -1,0 +1,27 @@
+switch(
+  name,
+  one = , # Trailing, stays beside `one`
+  two = , # Trailing, stays beside `two`
+  three = 1,
+  stop("oh no")
+)
+
+fn(
+  x,
+  # Moves above `one`
+  one = ,
+  two = 2
+)
+
+fn(
+  x,
+  # Trailing, stays beside `one`
+  one = ,
+  two = 2
+)
+
+fn(
+  x,
+  # Trailing, stays beside `one`
+  one =
+)

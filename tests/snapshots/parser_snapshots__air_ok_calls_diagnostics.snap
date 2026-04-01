@@ -1,44 +1,8 @@
 ---
 source: tests/parser_snapshots.rs
-assertion_line: 14
 expression: "format!(\"{:#?}\", output.diagnostics)"
 ---
 [
-    ParseDiagnostic {
-        message: "unexpected operator at expression start",
-        start: 87,
-        end: 88,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 97,
-        end: 99,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 109,
-        end: 111,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 120,
-        end: 122,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 132,
-        end: 134,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 143,
-        end: 145,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
-        start: 157,
-        end: 159,
-    },
     ParseDiagnostic {
         message: "expected assignment right-hand side",
         start: 166,
@@ -71,11 +35,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between arguments",
-        start: 339,
-        end: 340,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between arguments",
         start: 355,
         end: 356,
     },
@@ -90,18 +49,8 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         end: 454,
     },
     ParseDiagnostic {
-        message: "unexpected operator at expression start",
-        start: 465,
-        end: 466,
-    },
-    ParseDiagnostic {
         message: "expected ')' to close function call",
         start: 159,
         end: 160,
-    },
-    ParseDiagnostic {
-        message: "expected ')' to close function call",
-        start: 82,
-        end: 83,
     },
 ]

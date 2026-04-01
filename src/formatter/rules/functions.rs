@@ -88,7 +88,13 @@ fn format_arg_list_from_parts(
         out.push_str(arg);
         if idx < node_parts.comma_count {
             if idx + 1 < first_non_empty {
-                out.push(',');
+                if arg.trim_end().ends_with('=') {
+                    out.push_str(" ,");
+                } else {
+                    out.push(',');
+                }
+            } else if arg.trim_end().ends_with('=') {
+                out.push_str(" , ");
             } else {
                 out.push_str(", ");
             }
@@ -157,8 +163,13 @@ fn format_arg_list_multiline(
                 ) = (items.get(i + 1), items.get(i + 2))
                     && comment_arg.is_comment_only
                 {
+                    let sep = if arg.formatted.trim_end().ends_with('=') {
+                        " , "
+                    } else {
+                        ", "
+                    };
                     out.push(format!(
-                        "{item_indent}{}, {}",
+                        "{item_indent}{}{sep}{}",
                         arg.formatted, comment_arg.formatted
                     ));
                     i += 3;
@@ -222,9 +233,17 @@ fn indent_multiline_arg(formatted: &str, item_indent: &str, trailing_comma: bool
         *line = format!("{item_indent}{line}");
     }
     if trailing_comma && let Some(last) = lines.last_mut() {
-        last.push(',');
+        append_argument_comma(last);
     }
     lines.join("\n")
+}
+
+fn append_argument_comma(text: &mut String) {
+    if text.trim_end().ends_with('=') {
+        text.push_str(" ,");
+    } else {
+        text.push(',');
+    }
 }
 
 fn is_assignment_continuation(formatted: &str) -> bool {
@@ -599,14 +618,36 @@ fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<St
         .iter()
         .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
     {
-        let name = format_expr_segment(&elements[..eq_idx], "named arg name", indent, ctx)?;
+        let lhs_comments: Vec<String> = elements[..eq_idx]
+            .iter()
+            .filter_map(|el| match el {
+                NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                    Some(tok.text().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        let lhs_significant: Vec<_> = elements[..eq_idx]
+            .iter()
+            .filter(|el| {
+                !super::super::core::is_trivia(el.kind()) && el.kind() != SyntaxKind::COMMENT
+            })
+            .cloned()
+            .collect();
+        let name = if lhs_significant.is_empty() {
+            String::new()
+        } else {
+            format_expr_segment(&lhs_significant, "named arg name", indent, ctx)?
+        };
         let (leading_comments, value) =
             format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
-        let base = format!("{name} = {value}");
-        if leading_comments.is_empty() {
+        let base = format_named_assignment(&name, &value);
+        let mut all_comments = lhs_comments;
+        all_comments.extend(leading_comments);
+        if all_comments.is_empty() {
             return Ok(base);
         }
-        return Ok(format!("{}\n{base}", leading_comments.join("\n")));
+        return Ok(format!("{}\n{base}", all_comments.join("\n")));
     }
 
     let significant: Vec<_> = elements
@@ -650,7 +691,7 @@ fn format_named_arg_with_assignment_node(
         .collect();
     let (rhs_leading_comments, value) =
         format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
-    let base = format!("{name} = {value}");
+    let base = format_named_assignment(name, &value);
     let mut all_comments = leading_comments;
     all_comments.extend(rhs_leading_comments);
     if all_comments.is_empty() {
@@ -691,10 +732,14 @@ fn format_assignment_expr_arg(
         format_assignment_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
 
     let tail = if lhs_significant.is_empty() {
-        format!("= {rhs}")
+        if rhs.is_empty() {
+            "=".to_string()
+        } else {
+            format!("= {rhs}")
+        }
     } else {
         let lhs = format_expr_segment(&elements[..eq_idx], "assignment expr arg lhs", indent, ctx)?;
-        format!("{lhs} = {rhs}")
+        format_named_assignment(&lhs, &rhs)
     };
     let mut all_comments = leading_comments;
     all_comments.extend(rhs_leading_comments);
@@ -724,13 +769,25 @@ fn format_assignment_rhs_with_leading_comments(
         }
     }
     if idx >= elements.len() {
-        return Err(FormatError::AmbiguousConstruct {
-            context: "assignment rhs missing expression",
-            snippet: snippet_from_elements(elements),
-        });
+        return Ok((leading_comments, String::new()));
     }
     let value = format_expr_with_optional_comment(&elements[idx..], "assignment rhs", indent, ctx)?;
     Ok((leading_comments, value))
+}
+
+fn format_named_assignment(name: &str, value: &str) -> String {
+    if name.is_empty() {
+        return if value.is_empty() {
+            "=".to_string()
+        } else {
+            format!("= {value}")
+        };
+    }
+    if value.is_empty() {
+        format!("{name} =")
+    } else {
+        format!("{name} = {value}")
+    }
 }
 
 pub(crate) fn format_function_expr(

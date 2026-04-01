@@ -1,0 +1,100 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..119
+  CALL_EXPR@0..66
+    IDENT@0..6 "switch"
+    LPAREN@6..7 "("
+    ARG_LIST@7..65
+      NEWLINE@7..8 "\n"
+      WHITESPACE@8..10 "  "
+      ARG@10..14
+        IDENT@10..14 "name"
+      COMMA@14..15 ","
+      NEWLINE@15..16 "\n"
+      WHITESPACE@16..18 "  "
+      ARG@18..24
+        IDENT@18..21 "one"
+        WHITESPACE@21..22 " "
+        ASSIGN_EQ@22..23 "="
+        WHITESPACE@23..24 " "
+      COMMA@24..25 ","
+      NEWLINE@25..26 "\n"
+      WHITESPACE@26..28 "  "
+      ARG@28..34
+        IDENT@28..31 "two"
+        WHITESPACE@31..32 " "
+        ASSIGN_EQ@32..33 "="
+        WHITESPACE@33..34 " "
+      COMMA@34..35 ","
+      NEWLINE@35..36 "\n"
+      WHITESPACE@36..38 "  "
+      ARG@38..47
+        IDENT@38..43 "three"
+        WHITESPACE@43..44 " "
+        ASSIGN_EQ@44..45 "="
+        WHITESPACE@45..46 " "
+        INT@46..47 "1"
+      COMMA@47..48 ","
+      NEWLINE@48..49 "\n"
+      WHITESPACE@49..51 "  "
+      ARG@51..64
+        CALL_EXPR@51..64
+          IDENT@51..55 "stop"
+          LPAREN@55..56 "("
+          ARG_LIST@56..63
+            ARG@56..63
+              STRING@56..63 "\"oh no\""
+          RPAREN@63..64 ")"
+      NEWLINE@64..65 "\n"
+    RPAREN@65..66 ")"
+  NEWLINE@66..67 "\n"
+  NEWLINE@67..68 "\n"
+  CALL_EXPR@68..98
+    IDENT@68..70 "fn"
+    LPAREN@70..71 "("
+    ARG_LIST@71..97
+      NEWLINE@71..72 "\n"
+      WHITESPACE@72..74 "  "
+      ARG@74..75
+        IDENT@74..75 "x"
+      COMMA@75..76 ","
+      NEWLINE@76..77 "\n"
+      WHITESPACE@77..79 "  "
+      ARG@79..85
+        IDENT@79..82 "one"
+        WHITESPACE@82..83 " "
+        ASSIGN_EQ@83..84 "="
+        WHITESPACE@84..85 " "
+      COMMA@85..86 ","
+      NEWLINE@86..87 "\n"
+      WHITESPACE@87..89 "  "
+      ARG@89..96
+        IDENT@89..92 "two"
+        WHITESPACE@92..93 " "
+        ASSIGN_EQ@93..94 "="
+        WHITESPACE@94..95 " "
+        INT@95..96 "2"
+      NEWLINE@96..97 "\n"
+    RPAREN@97..98 ")"
+  NEWLINE@98..99 "\n"
+  NEWLINE@99..100 "\n"
+  CALL_EXPR@100..118
+    IDENT@100..102 "fn"
+    LPAREN@102..103 "("
+    ARG_LIST@103..117
+      NEWLINE@103..104 "\n"
+      WHITESPACE@104..106 "  "
+      ARG@106..107
+        IDENT@106..107 "x"
+      COMMA@107..108 ","
+      NEWLINE@108..109 "\n"
+      WHITESPACE@109..111 "  "
+      ARG@111..117
+        IDENT@111..114 "one"
+        WHITESPACE@114..115 " "
+        ASSIGN_EQ@115..116 "="
+        NEWLINE@116..117 "\n"
+    RPAREN@117..118 ")"
+  NEWLINE@118..119 "\n"
