@@ -51,18 +51,36 @@ fn format_arg_list(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<String, FormatError> {
-    let args: Vec<_> = node
-        .children()
-        .filter(|n| n.kind() == SyntaxKind::ARG)
-        .collect();
-    let mut formatted = Vec::new();
-    for arg in &args {
-        let s = format_arg(arg, indent, ctx)?;
-        if !s.is_empty() {
-            formatted.push(s);
+    let parts = collect_call_arg_parts(node, indent, ctx)?;
+    if parts.formatted_args.is_empty() {
+        return Ok(String::new());
+    }
+
+    if !parts.has_non_empty_arg {
+        return Ok(",".repeat(parts.comma_count));
+    }
+
+    let first_non_empty = parts
+        .formatted_args
+        .iter()
+        .position(|arg| !arg.is_empty())
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing non-empty call argument",
+            snippet: node.text().to_string(),
+        })?;
+
+    let mut out = String::new();
+    for (idx, arg) in parts.formatted_args.iter().enumerate() {
+        out.push_str(arg);
+        if idx < parts.comma_count {
+            if idx + 1 < first_non_empty {
+                out.push(',');
+            } else {
+                out.push_str(", ");
+            }
         }
     }
-    Ok(formatted.join(", "))
+    Ok(out)
 }
 
 fn format_arg_list_multiline(
@@ -70,26 +88,55 @@ fn format_arg_list_multiline(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<String, FormatError> {
-    let args: Vec<_> = node
-        .children()
-        .filter(|n| n.kind() == SyntaxKind::ARG)
-        .collect();
+    let parts = collect_call_arg_parts(node, indent + 1, ctx)?;
+    if parts.formatted_args.is_empty() {
+        return Ok(String::new());
+    }
 
     let mut out = Vec::new();
-    for (idx, arg) in args.iter().enumerate() {
-        let formatted = format_arg(arg, indent + 1, ctx)?;
-        if formatted.is_empty() {
-            continue;
-        }
-
+    for (idx, formatted) in parts.formatted_args.iter().enumerate() {
         let mut line = format!("{}{}", ctx.indent_text(indent + 1), formatted);
-        if idx + 1 < args.len() {
+        if idx < parts.comma_count {
             line.push(',');
         }
         out.push(line);
     }
 
     Ok(out.join("\n"))
+}
+
+struct CallArgParts {
+    formatted_args: Vec<String>,
+    comma_count: usize,
+    has_non_empty_arg: bool,
+}
+
+fn collect_call_arg_parts(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<CallArgParts, FormatError> {
+    let mut formatted_args = Vec::new();
+    let mut comma_count = 0usize;
+
+    for element in node.children_with_tokens() {
+        match element {
+            NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                formatted_args.push(format_arg(&arg, indent, ctx)?);
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
+                comma_count += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let has_non_empty_arg = formatted_args.iter().any(|arg| !arg.is_empty());
+    Ok(CallArgParts {
+        formatted_args,
+        comma_count,
+        has_non_empty_arg,
+    })
 }
 
 fn format_arg(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<String, FormatError> {

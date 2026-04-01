@@ -56,6 +56,7 @@ fn fixture_names() -> &'static [&'static str] {
         "program",
         "for_statement",
         "while_statement",
+        "call_basic_and_holes",
     ]
 }
 
