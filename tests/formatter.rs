@@ -54,6 +54,7 @@ fn fixture_names() -> &'static [&'static str] {
         "noop_comments",
         "noop_unary",
         "program",
+        "for_statement",
     ]
 }
 
