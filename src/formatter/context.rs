@@ -18,6 +18,11 @@ impl FormatContext {
         !text.contains('\n') && text.chars().count() <= self.max_inline_width(indent)
     }
 
+    pub(crate) fn fits_with_newlines(self, indent: usize, text: &str) -> bool {
+        let max = self.max_inline_width(indent);
+        text.lines().all(|line| line.chars().count() <= max)
+    }
+
     fn max_inline_width(self, indent: usize) -> usize {
         self.style
             .line_width

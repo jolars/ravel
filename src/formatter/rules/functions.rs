@@ -34,6 +34,14 @@ pub(crate) fn format_call_expr(
         })?;
 
     let parts = collect_call_arg_parts(&arg_list, indent, ctx)?;
+
+    if let Some(inline) = try_format_call_with_trailing_block(&callee, &parts, indent, ctx)?
+        && !parts.has_comment_arg
+        && ctx.fits_with_newlines(indent, &inline)
+    {
+        return Ok(inline);
+    }
+
     let formatted_args = format_arg_list_from_parts(&parts, &arg_list)?;
     let inline = format!("{callee}({formatted_args})");
     if !parts.has_comment_arg && ctx.fits_inline(indent, &inline) {
@@ -201,6 +209,7 @@ fn collect_call_items(
 
 struct CallArgParts {
     formatted_args: Vec<String>,
+    arg_infos: Vec<ArgInfo>,
     comma_count: usize,
     has_non_empty_arg: bool,
     has_comment_arg: bool,
@@ -212,14 +221,22 @@ fn collect_call_arg_parts(
     ctx: FormatContext,
 ) -> Result<CallArgParts, FormatError> {
     let mut formatted_args = Vec::new();
+    let mut arg_infos = Vec::new();
     let mut comment_arg_mask = Vec::new();
     let mut comma_count = 0usize;
 
     for element in node.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
-                comment_arg_mask.push(is_comment_only_arg(&arg));
-                formatted_args.push(format_arg(&arg, indent, ctx)?);
+                let formatted = format_arg(&arg, indent, ctx)?;
+                let is_comment_only = is_comment_only_arg(&arg);
+                comment_arg_mask.push(is_comment_only);
+                formatted_args.push(formatted.clone());
+                arg_infos.push(ArgInfo {
+                    formatted,
+                    is_empty: false,
+                    is_comment_only,
+                });
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
                 comma_count += 1;
@@ -232,10 +249,56 @@ fn collect_call_arg_parts(
     let has_comment_arg = comment_arg_mask.iter().any(|is_comment| *is_comment);
     Ok(CallArgParts {
         formatted_args,
+        arg_infos,
         comma_count,
         has_non_empty_arg,
         has_comment_arg,
     })
+}
+
+fn try_format_call_with_trailing_block(
+    callee: &str,
+    parts: &CallArgParts,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<String>, FormatError> {
+    if parts.arg_infos.is_empty() || parts.arg_infos.len() != parts.comma_count + 1 {
+        return Ok(None);
+    }
+    if parts.arg_infos.iter().any(|arg| arg.is_comment_only) {
+        return Ok(None);
+    }
+    if parts.arg_infos.iter().any(|arg| arg.formatted.is_empty()) {
+        return Ok(None);
+    }
+
+    let Some((last, leading)) = parts.arg_infos.split_last() else {
+        return Ok(None);
+    };
+    if !looks_like_trailing_block_arg(&last.formatted) {
+        return Ok(None);
+    }
+    if leading.iter().any(|arg| arg.formatted.contains('\n')) {
+        return Ok(None);
+    }
+    let inline_leading = leading
+        .iter()
+        .map(|arg| arg.formatted.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let candidate = if inline_leading.is_empty() {
+        format!("{callee}({})", last.formatted)
+    } else {
+        format!("{callee}({inline_leading}, {})", last.formatted)
+    };
+    if ctx.fits_with_newlines(indent, &candidate) {
+        return Ok(Some(candidate));
+    }
+    Ok(None)
+}
+
+fn looks_like_trailing_block_arg(text: &str) -> bool {
+    (text.starts_with('{') || text.contains(" = {")) && text.ends_with('}')
 }
 
 fn is_comment_only_arg(node: &SyntaxNode) -> bool {
