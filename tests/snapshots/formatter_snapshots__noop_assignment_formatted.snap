@@ -2,4 +2,4 @@
 source: tests/formatter_snapshots.rs
 expression: formatted
 ---
-x <- (1 + 2) * 3 ^ 4
+x <- (1 + 2) * 3^4

@@ -59,7 +59,7 @@ fn fixture_names() -> &'static [&'static str] {
 #[test]
 fn formats_assignment_binary_and_paren_stably() {
     let input = "x<-(1+2)*3^4\n";
-    let expected = "x <- (1 + 2) * 3 ^ 4\n";
+    let expected = "x <- (1 + 2) * 3^4\n";
     let formatted = format(input).expect("should format input");
     assert_eq!(formatted, expected);
     let reformatted = format(&formatted).expect("should remain formatable");

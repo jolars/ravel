@@ -300,18 +300,28 @@ fn format_binary_expr(
             snippet: node.text().to_string(),
         })?;
 
-    let op = match &elements[op_idx] {
-        NodeOrToken::Token(tok) => tok.text().to_string(),
+    let (op_kind, op_text) = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => (tok.kind(), tok.text().to_string()),
         NodeOrToken::Node(_) => unreachable!(),
     };
     let lhs = format_expr_segment(&elements[..op_idx], "binary lhs", indent, ctx)?;
     let rhs = format_expr_segment(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
-    let inline = format!("{lhs} {op} {rhs}");
+    let (inline, multiline) = if op_kind == SyntaxKind::CARET {
+        (
+            format!("{lhs}{op_text}{rhs}"),
+            format!("{lhs}\n{}{}{rhs}", ctx.indent_text(indent + 1), op_text),
+        )
+    } else {
+        (
+            format!("{lhs} {op_text} {rhs}"),
+            format!("{lhs}\n{}{} {rhs}", ctx.indent_text(indent + 1), op_text),
+        )
+    };
     if ctx.fits_inline(indent, &inline) {
         return Ok(inline);
     }
 
-    Ok(format!("{lhs}\n{}{op} {rhs}", ctx.indent_text(indent + 1)))
+    Ok(multiline)
 }
 
 fn format_call_expr(
