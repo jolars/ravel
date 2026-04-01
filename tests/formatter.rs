@@ -71,6 +71,7 @@ fn fixture_names() -> &'static [&'static str] {
         "call_comments_basic",
         "call_hugging_basics",
         "call_comments_sanity",
+        "call_leading_holes_hugging",
     ]
 }
 
