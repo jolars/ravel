@@ -76,6 +76,7 @@ fn fixture_names() -> &'static [&'static str] {
         "function_definition_misc",
         "function_definition_autobracing",
         "function_definition_comments",
+        "function_definition_user_requested_line_break",
     ]
 }
 

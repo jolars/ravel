@@ -2,8 +2,10 @@ use rowan::{NodeOrToken, SyntaxElement};
 
 use super::super::context::FormatContext;
 use super::super::core::{
-    FormatError, format_expr_segment, format_expr_with_optional_comment, snippet_from_elements,
+    FormatError, format_expr_element, format_expr_segment, format_expr_with_optional_comment,
+    snippet_from_elements,
 };
+use crate::parser::parse;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
 pub(crate) fn format_call_expr(
@@ -1353,7 +1355,13 @@ fn format_expr_or_braced_tokens(
         Some(NodeOrToken::Token(tok)) if tok.kind() == SyntaxKind::RBRACE
     );
     if !is_token_braced {
-        return format_expr_with_optional_comment(elements, context, indent, ctx);
+        return match format_expr_with_optional_comment(elements, context, indent, ctx) {
+            Ok(formatted) => Ok(formatted),
+            Err(FormatError::AmbiguousConstruct { .. }) => {
+                format_expr_tokens_via_parser(elements, context, indent, ctx)
+            }
+            Err(err) => Err(err),
+        };
     }
 
     if significant.len() == 2 {
@@ -1368,4 +1376,26 @@ fn format_expr_or_braced_tokens(
         inner_text,
         ctx.indent_text(indent)
     ))
+}
+
+fn format_expr_tokens_via_parser(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let snippet = snippet_from_elements(elements);
+    let parsed = parse(&snippet);
+    if !parsed.diagnostics.is_empty() {
+        return Err(FormatError::AmbiguousConstruct { context, snippet });
+    }
+    let significant: Vec<_> = parsed
+        .cst
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if significant.len() != 1 {
+        return Err(FormatError::AmbiguousConstruct { context, snippet });
+    }
+    format_expr_element(&significant[0], indent, ctx)
 }
