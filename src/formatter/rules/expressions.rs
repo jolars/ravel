@@ -234,7 +234,7 @@ pub(crate) fn format_subset_expr(
             snippet: node.text().to_string(),
         })?;
 
-    let args = format_subset_args_inline(&arg_list, indent, ctx)?;
+    let args = format_subset_args(&arg_list, indent, ctx, &target, open_kind, close_kind)?;
     let open = match open_kind {
         SyntaxKind::LBRACK => "[",
         SyntaxKind::LBRACK2 => "[[",
@@ -248,30 +248,37 @@ pub(crate) fn format_subset_expr(
     Ok(format!("{target}{open}{args}{close}"))
 }
 
-fn format_subset_args_inline(
+fn format_subset_args(
     arg_list: &SyntaxNode,
     indent: usize,
     ctx: FormatContext,
+    target: &str,
+    open_kind: SyntaxKind,
+    close_kind: SyntaxKind,
 ) -> Result<String, FormatError> {
     let parts = collect_subset_arg_parts(arg_list, indent, ctx)?;
-    if parts.args.is_empty() {
+    if parts.slots.is_empty() {
         return Ok(String::new());
     }
 
-    let inline_args = format_subset_args_inline_from_parts(&parts);
-    let leading_hole = parts.commas > 0 && parts.args.first().is_some_and(|arg| arg.is_empty());
-    let has_multiline_arg = parts.args.iter().any(|arg| arg.contains('\n'));
-    let multiline_trailing_arg_allowed = leading_hole && can_inline_trailing_multiline_arg(&parts);
-    let force_multiline = has_multiline_arg && !multiline_trailing_arg_allowed;
+    let inline_args = format_subset_args_inline_from_parts(&parts, true);
+    let inline_expr = format!(
+        "{target}{}{}{}",
+        bracket_open_text(open_kind),
+        inline_args,
+        bracket_close_text(close_kind)
+    );
+    let has_multiline_arg = parts.slots.iter().flatten().any(|arg| arg.contains('\n'));
+    let force_multiline =
+        should_force_subset_multiline(&parts) || !ctx.fits_with_newlines(indent, &inline_expr);
     if !force_multiline {
         return Ok(inline_args);
     }
-    format_subset_args_multiline(&parts, indent, ctx)
+    format_subset_args_multiline(&parts, indent, ctx, has_multiline_arg)
 }
 
 struct SubsetArgParts {
-    args: Vec<String>,
-    commas: usize,
+    slots: Vec<Option<String>>,
 }
 
 fn collect_subset_arg_parts(
@@ -279,16 +286,16 @@ fn collect_subset_arg_parts(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<SubsetArgParts, FormatError> {
-    let mut args = Vec::new();
-    let mut commas = 0usize;
+    let mut slots: Vec<Option<String>> = vec![None];
+    let mut slot_idx = 0usize;
     for element in arg_list.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
                 let arg_elements: Vec<_> = arg.children_with_tokens().collect();
                 if arg_elements.is_empty() {
-                    args.push(String::new());
+                    slots[slot_idx] = Some(String::new());
                 } else {
-                    args.push(format_expr_segment(
+                    slots[slot_idx] = Some(format_expr_segment(
                         &arg_elements,
                         "subset argument",
                         indent,
@@ -296,27 +303,38 @@ fn collect_subset_arg_parts(
                     )?);
                 }
             }
-            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => commas += 1,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
+                slot_idx += 1;
+                if slots.len() <= slot_idx {
+                    slots.push(None);
+                }
+            }
             _ => {}
         }
     }
-    Ok(SubsetArgParts { args, commas })
+    Ok(SubsetArgParts { slots })
 }
 
-fn format_subset_args_inline_from_parts(parts: &SubsetArgParts) -> String {
+fn format_subset_args_inline_from_parts(
+    parts: &SubsetArgParts,
+    compact_before_first: bool,
+) -> String {
+    let first_non_empty = first_non_empty_slot(parts);
+    let no_non_empty = first_non_empty.is_none();
     let mut out = String::new();
-    for (idx, arg) in parts.args.iter().enumerate() {
-        out.push_str(arg);
-        if idx < parts.commas {
-            let next = parts.args.get(idx + 1).map_or("", String::as_str);
-            if arg.is_empty() && next.is_empty() {
+    for idx in 0..parts.slots.len() {
+        if let Some(arg) = &parts.slots[idx] {
+            out.push_str(arg);
+        }
+        if idx + 1 < parts.slots.len() {
+            let left_empty = parts.slots[idx].as_deref().is_none_or(str::is_empty);
+            let right_empty = parts.slots[idx + 1].as_deref().is_none_or(str::is_empty);
+            if left_empty
+                && right_empty
+                && (no_non_empty
+                    || first_non_empty.is_some_and(|first| idx + 1 < first && compact_before_first))
+            {
                 out.push(',');
-            } else if arg.is_empty() || next.is_empty() {
-                if next.is_empty() {
-                    out.push(',');
-                } else {
-                    out.push_str(", ");
-                }
             } else {
                 out.push_str(", ");
             }
@@ -325,60 +343,163 @@ fn format_subset_args_inline_from_parts(parts: &SubsetArgParts) -> String {
     out
 }
 
-fn can_inline_trailing_multiline_arg(parts: &SubsetArgParts) -> bool {
-    if parts.args.is_empty() {
+fn should_force_subset_multiline(parts: &SubsetArgParts) -> bool {
+    let Some(first_non_empty) = first_non_empty_slot(parts) else {
+        return false;
+    };
+    let inline = format_subset_args_inline_from_parts(parts, true);
+    let has_multiline = inline.contains('\n');
+    if !has_multiline {
         return false;
     }
-    let last_idx = parts.args.len() - 1;
-    if !parts.args[last_idx].contains('\n') {
-        return false;
-    }
-    let non_empty_before_last = parts.args[..last_idx]
+    let leading_hole = parts
+        .slots
+        .first()
+        .is_some_and(|slot| slot.as_deref().is_none_or(str::is_empty));
+    let non_empty_count = parts
+        .slots
         .iter()
-        .filter(|arg| !arg.is_empty())
+        .filter(|slot| slot.as_deref().is_some_and(|arg| !arg.is_empty()))
         .count();
-    non_empty_before_last <= 1
+    let first_is_multiline = parts.slots[first_non_empty]
+        .as_deref()
+        .is_some_and(|arg| arg.contains('\n'));
+    leading_hole && first_is_multiline && non_empty_count > 1
+}
+
+fn first_non_empty_slot(parts: &SubsetArgParts) -> Option<usize> {
+    parts
+        .slots
+        .iter()
+        .position(|slot| slot.as_deref().is_some_and(|arg| !arg.is_empty()))
 }
 
 fn format_subset_args_multiline(
     parts: &SubsetArgParts,
     indent: usize,
     ctx: FormatContext,
+    has_multiline_arg: bool,
 ) -> Result<String, FormatError> {
-    let mut out = String::new();
-    let item_indent = ctx.indent_text(indent + 1);
-    let leading_hole = parts.commas > 0 && parts.args.first().is_some_and(|arg| arg.is_empty());
-    let start_idx = if leading_hole { 1 } else { 0 };
-    if !leading_hole {
-        out.push('\n');
+    let inline = format_subset_args_inline_from_parts(parts, true);
+    if !has_multiline_arg {
+        let candidate = format!("[{inline}]");
+        if !ctx.fits_with_newlines(indent, &candidate) {
+            return format_subset_args_multiline_wrapped(parts, indent, ctx);
+        }
     }
 
-    for idx in start_idx..parts.args.len() {
-        let arg = &parts.args[idx];
-        let has_trailing_comma = idx < parts.commas;
-        if arg.is_empty() {
-            out.push_str(&item_indent);
-            if has_trailing_comma {
-                out.push(',');
+    let mut out = String::new();
+    let leading_hole = parts
+        .slots
+        .first()
+        .is_some_and(|slot| slot.as_deref().is_none_or(str::is_empty));
+    if leading_hole {
+        out.push(',');
+    }
+    out.push('\n');
+
+    let first_non_empty = first_non_empty_slot(parts).unwrap_or(0);
+    let item_indent = ctx.indent_text(indent + 1);
+    for idx in (if leading_hole { 1 } else { 0 })..parts.slots.len() {
+        if idx > first_non_empty
+            && parts.slots[idx]
+                .as_deref()
+                .is_some_and(|arg| arg.contains('\n'))
+        {
+            return format_subset_args_multiline_wrapped(parts, indent, ctx);
+        }
+
+        if let Some(arg) = parts.slots[idx].as_deref() {
+            let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
+            if lines.is_empty() {
+                continue;
             }
+            lines[0] = format!("{item_indent}{}", lines[0]);
+            for line in lines.iter_mut().skip(1) {
+                *line = format!("{item_indent}{line}");
+            }
+            if idx + 1 < parts.slots.len()
+                && let Some(last) = lines.last_mut()
+            {
+                last.push(',');
+            }
+            out.push_str(&lines.join("\n"));
             out.push('\n');
             continue;
         }
-        let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
-        if lines.is_empty() {
-            continue;
+
+        out.push_str(&item_indent);
+        if idx + 1 < parts.slots.len() {
+            out.push(',');
         }
-        lines[0] = format!("{item_indent}{}", lines[0]);
-        for line in lines.iter_mut().skip(1) {
-            *line = format!("{item_indent}{line}");
-        }
-        if has_trailing_comma && let Some(last) = lines.last_mut() {
-            last.push(',');
-        }
-        out.push_str(&lines.join("\n"));
         out.push('\n');
     }
 
     out.push_str(&ctx.indent_text(indent));
     Ok(out)
+}
+
+fn format_subset_args_multiline_wrapped(
+    parts: &SubsetArgParts,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let mut out = String::from("\n");
+    let item_indent = ctx.indent_text(indent + 1);
+    for idx in 0..parts.slots.len() {
+        let is_last = idx + 1 == parts.slots.len();
+        let prev_is_empty = idx > 0 && parts.slots[idx - 1].as_deref().is_none_or(str::is_empty);
+        if is_last && prev_is_empty && parts.slots[idx].as_deref().is_none_or(str::is_empty) {
+            continue;
+        }
+        if let Some(arg) = parts.slots[idx].as_deref() {
+            if arg.is_empty() {
+                out.push_str(&item_indent);
+                if idx + 1 < parts.slots.len() {
+                    out.push(',');
+                }
+                out.push('\n');
+                continue;
+            }
+            let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
+            if lines.is_empty() {
+                continue;
+            }
+            lines[0] = format!("{item_indent}{}", lines[0]);
+            for line in lines.iter_mut().skip(1) {
+                *line = format!("{item_indent}{line}");
+            }
+            if idx + 1 < parts.slots.len()
+                && let Some(last) = lines.last_mut()
+            {
+                last.push(',');
+            }
+            out.push_str(&lines.join("\n"));
+            out.push('\n');
+            continue;
+        }
+        out.push_str(&item_indent);
+        if idx + 1 < parts.slots.len() {
+            out.push(',');
+        }
+        out.push('\n');
+    }
+    out.push_str(&ctx.indent_text(indent));
+    Ok(out)
+}
+
+fn bracket_open_text(kind: SyntaxKind) -> &'static str {
+    match kind {
+        SyntaxKind::LBRACK => "[",
+        SyntaxKind::LBRACK2 => "[[",
+        _ => "",
+    }
+}
+
+fn bracket_close_text(kind: SyntaxKind) -> &'static str {
+    match kind {
+        SyntaxKind::RBRACK => "]",
+        SyntaxKind::RBRACK2 => "]]",
+        _ => "",
+    }
 }
