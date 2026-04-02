@@ -363,7 +363,14 @@ pub(crate) fn parse_function_expr(
     let function_tok = tokens.get(start)?;
     let mut events = vec![Event::Start(SyntaxKind::FUNCTION_EXPR), Event::Tok(start)];
     let mut cursor = start + 1;
-    let params_lparen = ctx.skip_ws_and_newlines(cursor);
+    let mut params_lparen = ctx.skip_ws_and_newlines(cursor);
+    while matches!(
+        tokens.get(params_lparen).map(|t| &t.kind),
+        Some(TokKind::Comment)
+    ) {
+        params_lparen += 1;
+        params_lparen = ctx.skip_ws_and_newlines(params_lparen);
+    }
     let function_like = matches!(function_tok.kind, TokKind::FunctionKw | TokKind::LambdaFn);
 
     if matches!(
@@ -416,7 +423,14 @@ pub(crate) fn parse_function_expr(
         cursor = params_lparen;
     }
 
-    let body_start = ctx.skip_ws_and_newlines(cursor);
+    let mut body_start = ctx.skip_ws_and_newlines(cursor);
+    while matches!(
+        tokens.get(body_start).map(|t| &t.kind),
+        Some(TokKind::Comment)
+    ) {
+        body_start += 1;
+        body_start = ctx.skip_ws_and_newlines(body_start);
+    }
     if let Some(body_expr) = parse_expr(tokens, body_start, 0, diagnostics) {
         push_range(&mut events, cursor, body_expr.start);
         events.extend(body_expr.events);

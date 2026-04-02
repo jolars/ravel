@@ -953,6 +953,16 @@ pub(crate) fn format_function_expr(
         NodeOrToken::Token(tok) if tok.text() == "\\" => "\\",
         _ => "function",
     };
+    let leading_fn_comments = elements[fn_idx + 1..]
+        .iter()
+        .take_while(|el| !matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN))
+        .filter_map(|el| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                Some(tok.text().to_string())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     let lparen_idx = elements
         .iter()
         .enumerate()
@@ -989,31 +999,224 @@ pub(crate) fn format_function_expr(
 
     let params = format_function_parameters(&elements[lparen_idx + 1..rparen_idx], indent, ctx)?;
     let body_elements = &elements[rparen_idx + 1..];
-    let body = format_expr_segment(body_elements, "function body", indent, ctx)?;
-    let body_significant: Vec<_> = body_elements
+    let mut body_leading_comments = Vec::new();
+    let mut body_start_idx = 0usize;
+    while body_start_idx < body_elements.len() {
+        match &body_elements[body_start_idx] {
+            NodeOrToken::Token(tok) if super::super::core::is_trivia(tok.kind()) => {
+                body_start_idx += 1;
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                body_leading_comments.push(tok.text().to_string());
+                body_start_idx += 1;
+            }
+            _ => break,
+        }
+    }
+    let body_core = &body_elements[body_start_idx..];
+    if body_core.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "missing function body expression",
+            snippet: node.text().to_string(),
+        });
+    }
+
+    let body = format_expr_segment(body_core, "function body", indent, ctx)?;
+    let body_significant: Vec<_> = body_core
         .iter()
-        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .filter(|el| !super::super::core::is_trivia(el.kind()) && el.kind() != SyntaxKind::COMMENT)
         .cloned()
         .collect();
     let body_is_block = matches!(
         body_significant.as_slice(),
         [NodeOrToken::Node(n)] if n.kind() == SyntaxKind::BLOCK_EXPR
     );
-    let inline = format!("{function_head}({params}) {body}");
-    if body_is_block || (!params.contains('\n') && ctx.fits_with_newlines(indent, &inline)) {
-        return Ok(inline);
+    if body_is_block {
+        let body_block =
+            prepend_comments_to_formatted_block(&body, &body_leading_comments, indent, ctx);
+        let rendered = format!("{function_head}({params}) {body_block}");
+        return Ok(prepend_function_leading_comments(
+            rendered,
+            &leading_fn_comments,
+            indent,
+            ctx,
+        ));
     }
 
-    let body_line = format_expr_segment(body_elements, "function body", indent + 1, ctx)?;
-    Ok(format!(
-        "{function_head}({params}) {{\n{}{}\n{}}}",
-        ctx.indent_text(indent + 1),
-        body_line,
+    let inline = format!("{function_head}({params}) {body}");
+    if body_leading_comments.is_empty()
+        && !params.contains('\n')
+        && ctx.fits_with_newlines(indent, &inline)
+    {
+        return Ok(prepend_function_leading_comments(
+            inline,
+            &leading_fn_comments,
+            indent,
+            ctx,
+        ));
+    }
+
+    let body_line = format_expr_segment(body_core, "function body", indent + 1, ctx)?;
+    let mut block_lines = Vec::new();
+    for comment in body_leading_comments {
+        block_lines.push(format!("{}{}", ctx.indent_text(indent + 1), comment));
+    }
+    block_lines.push(format!("{}{}", ctx.indent_text(indent + 1), body_line));
+    let rendered = format!(
+        "{function_head}({params}) {{\n{}\n{}}}",
+        block_lines.join("\n"),
         ctx.indent_text(indent)
+    );
+    Ok(prepend_function_leading_comments(
+        rendered,
+        &leading_fn_comments,
+        indent,
+        ctx,
     ))
 }
 
+fn prepend_comments_to_formatted_block(
+    block: &str,
+    comments: &[String],
+    indent: usize,
+    ctx: FormatContext,
+) -> String {
+    if comments.is_empty() {
+        return block.to_string();
+    }
+    let comment_lines = comments
+        .iter()
+        .map(|comment| format!("{}{}", ctx.indent_text(indent + 1), comment))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if block == "{}" {
+        return format!("{{\n{comment_lines}\n{}}}", ctx.indent_text(indent));
+    }
+    if let Some(inner) = block
+        .strip_prefix("{\n")
+        .and_then(|rest| rest.strip_suffix("\n}"))
+    {
+        if inner.is_empty() {
+            return format!("{{\n{comment_lines}\n{}}}", ctx.indent_text(indent));
+        }
+        return format!(
+            "{{\n{comment_lines}\n{inner}\n{}}}",
+            ctx.indent_text(indent)
+        );
+    }
+    format!(
+        "{{\n{comment_lines}\n{}\n{}}}",
+        block,
+        ctx.indent_text(indent)
+    )
+}
+
+fn prepend_function_leading_comments(
+    rendered: String,
+    comments: &[String],
+    indent: usize,
+    ctx: FormatContext,
+) -> String {
+    if comments.is_empty() {
+        return rendered;
+    }
+    let prefix = comments
+        .iter()
+        .map(|comment| format!("{}{}", ctx.indent_text(indent), comment))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("{prefix}\n{rendered}")
+}
+
 fn format_function_parameters(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let has_param_comment = elements
+        .iter()
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT));
+    if !has_param_comment {
+        return format_function_parameters_without_comments(elements, indent, ctx);
+    }
+
+    let param_segments = split_top_level_function_params(elements);
+    if param_segments.is_empty() {
+        return Ok(String::new());
+    }
+    let mut multiline = String::new();
+    multiline.push('\n');
+    for (idx, segment) in param_segments.iter().enumerate() {
+        let raw = snippet_from_elements(segment);
+        let lines = raw
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            continue;
+        }
+        for (line_idx, line) in lines.iter().enumerate() {
+            multiline.push_str(&ctx.indent_text(indent + 1));
+            multiline.push_str(line);
+            if idx + 1 < param_segments.len() && line_idx + 1 == lines.len() {
+                multiline.push(',');
+            }
+            multiline.push('\n');
+        }
+    }
+    multiline.push_str(&ctx.indent_text(indent));
+    Ok(multiline)
+}
+
+fn split_top_level_function_params(
+    elements: &[SyntaxElement<RLanguage>],
+) -> Vec<Vec<SyntaxElement<RLanguage>>> {
+    let mut segments = Vec::new();
+    let mut current = Vec::new();
+    let mut depth = 0usize;
+
+    for element in elements {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA && depth == 0 => {
+                if !current.is_empty() {
+                    segments.push(std::mem::take(&mut current));
+                }
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::LPAREN
+                        | SyntaxKind::LBRACE
+                        | SyntaxKind::LBRACK
+                        | SyntaxKind::LBRACK2
+                ) =>
+            {
+                depth += 1;
+                current.push(element.clone());
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::RPAREN
+                        | SyntaxKind::RBRACE
+                        | SyntaxKind::RBRACK
+                        | SyntaxKind::RBRACK2
+                ) =>
+            {
+                depth = depth.saturating_sub(1);
+                current.push(element.clone());
+            }
+            _ => current.push(element.clone()),
+        }
+    }
+    if !current.is_empty() {
+        segments.push(current);
+    }
+    segments
+}
+
+fn format_function_parameters_without_comments(
     elements: &[SyntaxElement<RLanguage>],
     indent: usize,
     ctx: FormatContext,
