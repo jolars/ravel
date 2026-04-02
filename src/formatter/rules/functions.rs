@@ -1034,6 +1034,20 @@ pub(crate) fn format_function_expr(
         [NodeOrToken::Node(n)] if n.kind() == SyntaxKind::BLOCK_EXPR
     );
     if body_is_block {
+        if body_leading_comments.is_empty()
+            && !params.contains('\n')
+            && let Some(flat_body) = flatten_simple_formatted_block(&body)
+        {
+            let inline = format!("{function_head}({params}) {flat_body}");
+            if ctx.fits_with_newlines(indent, &inline) {
+                return Ok(prepend_function_leading_comments(
+                    inline,
+                    &leading_fn_comments,
+                    indent,
+                    ctx,
+                ));
+            }
+        }
         let body_block =
             prepend_comments_to_formatted_block(&body, &body_leading_comments, indent, ctx);
         let rendered = format!("{function_head}({params}) {body_block}");
@@ -1111,6 +1125,23 @@ fn prepend_comments_to_formatted_block(
         block,
         ctx.indent_text(indent)
     )
+}
+
+fn flatten_simple_formatted_block(block: &str) -> Option<String> {
+    let inner = block.strip_prefix("{\n")?.strip_suffix("\n}")?;
+    let lines = inner
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    if lines.len() != 1 {
+        return None;
+    }
+    let line = lines[0];
+    if line.starts_with('#') || line.contains('#') {
+        return None;
+    }
+    Some(line.to_string())
 }
 
 fn prepend_function_leading_comments(

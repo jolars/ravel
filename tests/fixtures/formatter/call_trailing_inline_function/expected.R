@@ -1,14 +1,8 @@
-map(xs, \(x) {
-  x + 1
-})
+map(xs, \(x) x + 1)
 
-map(xs, \(x) {
-  x + 1
-})
+map(xs, \(x) x + 1)
 
-map(xs, function(x) {
-  x + 1
-})
+map(xs, function(x) x + 1)
 
 map(xs, function(x) {})
 map(
@@ -63,17 +57,11 @@ map(
 
 map(xs, function(x, option = "a") x)
 
-map(xs, function(x, option = "a") {
-  x
-})
+map(xs, function(x, option = "a") x)
 
-map(xs, function(x, option = "a") {
-  x
-})
+map(xs, function(x, option = "a") x)
 
-map(xs, function(x, option = "a") {
-  x
-})
+map(xs, function(x, option = "a") x)
 
 map(x, function(a = {
   1
@@ -94,9 +82,4 @@ fn(function(
   1
 })
 
-map(
-  xs,
-  .f = function(x) {
-    x + 1
-  }
-)
+map(xs, .f = function(x) x + 1)
