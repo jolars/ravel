@@ -55,16 +55,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",
-        start: 169,
-        end: 182,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 183,
-        end: 185,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
         start: 191,
         end: 193,
     },
@@ -72,16 +62,6 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         message: "expected ',' between subset arguments",
         start: 201,
         end: 203,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 217,
-        end: 232,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 233,
-        end: 235,
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",
@@ -95,33 +75,13 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",
-        start: 298,
-        end: 299,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 300,
-        end: 310,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
         start: 314,
         end: 316,
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",
-        start: 323,
-        end: 333,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
         start: 351,
         end: 352,
-    },
-    ParseDiagnostic {
-        message: "expected ',' between subset arguments",
-        start: 353,
-        end: 363,
     },
     ParseDiagnostic {
         message: "expected ',' between subset arguments",

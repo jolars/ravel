@@ -755,6 +755,7 @@ fn parse_bracket_expr(
     let mut i = open_idx + 1;
 
     let mut expect_delimiter = false;
+    let mut last_arg_was_comment_only = false;
     loop {
         let next_i = ctx.skip_ws_and_newlines(i);
         let had_newline_gap = has_newline(tokens, i, next_i);
@@ -771,7 +772,10 @@ fn parse_bracket_expr(
             && !had_newline_gap
             && let Some(tok) = tokens.get(i)
         {
-            push_token_diagnostic(diagnostics, "expected ',' between subset arguments", tok);
+            let current_is_comment = tok.kind == TokKind::Comment;
+            if !current_is_comment && !last_arg_was_comment_only {
+                push_token_diagnostic(diagnostics, "expected ',' between subset arguments", tok);
+            }
         }
 
         if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::Comma)) {
@@ -780,17 +784,24 @@ fn parse_bracket_expr(
             events.push(Event::Tok(i));
             i += 1;
             expect_delimiter = false;
+            last_arg_was_comment_only = false;
             continue;
         }
 
         events.push(Event::Start(SyntaxKind::ARG));
         if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+            last_arg_was_comment_only = arg.end == arg.start + 1
+                && matches!(
+                    tokens.get(arg.start).map(|t| &t.kind),
+                    Some(TokKind::Comment)
+                );
             for idx in i..arg.start {
                 events.push(Event::Tok(idx));
             }
             events.extend(arg.events);
             i = arg.end;
         } else {
+            last_arg_was_comment_only = false;
             events.push(Event::Tok(i));
             i += 1;
         }
@@ -806,6 +817,7 @@ fn parse_bracket_expr(
             events.push(Event::Tok(i));
             i += 1;
             expect_delimiter = false;
+            last_arg_was_comment_only = false;
         }
     }
 

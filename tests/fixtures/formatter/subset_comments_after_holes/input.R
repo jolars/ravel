@@ -1,0 +1,4 @@
+dt[,
+  # comment
+  x
+]

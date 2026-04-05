@@ -1,8 +1,8 @@
-use rowan::NodeOrToken;
+use rowan::{NodeOrToken, SyntaxElement};
 
 use super::super::context::FormatContext;
-use super::super::core::{FormatError, format_expr_segment};
-use crate::syntax::{SyntaxKind, SyntaxNode};
+use super::super::core::{FormatError, format_expr_segment, format_expr_with_optional_comment};
+use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
 pub(crate) fn format_unary_expr(
     node: &SyntaxNode,
@@ -258,6 +258,7 @@ fn format_subset_args(
     );
     let has_multiline_arg = parts.slots.iter().flatten().any(|arg| arg.contains('\n'));
     let force_multiline = parts.has_comment_only_slot
+        || parts.has_comment_prefixed_expr_slot
         || should_force_subset_multiline(&parts)
         || !ctx.fits_with_newlines(indent, &inline_expr);
     if !force_multiline {
@@ -272,6 +273,7 @@ fn format_subset_args(
 struct SubsetArgParts {
     slots: Vec<Option<String>>,
     has_comment_only_slot: bool,
+    has_comment_prefixed_expr_slot: bool,
 }
 
 fn collect_subset_arg_parts(
@@ -282,6 +284,7 @@ fn collect_subset_arg_parts(
     let mut slots: Vec<Option<String>> = vec![None];
     let mut slot_idx = 0usize;
     let mut has_comment_only_slot = false;
+    let mut has_comment_prefixed_expr_slot = false;
     for element in arg_list.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
@@ -309,15 +312,30 @@ fn collect_subset_arg_parts(
                                 _ => None,
                             })
                             .unwrap_or_default();
-                        slots[slot_idx] = Some(comment);
+                        match slots[slot_idx].take() {
+                            Some(existing) if !existing.is_empty() => {
+                                slots[slot_idx] = Some(format!("{existing}\n{comment}"));
+                            }
+                            _ => {
+                                slots[slot_idx] = Some(comment);
+                            }
+                        }
                         has_comment_only_slot = true;
                     } else {
-                        slots[slot_idx] = Some(format_expr_segment(
-                            &arg_elements,
-                            "subset argument",
-                            indent,
-                            ctx,
-                        )?);
+                        let (formatted, has_comment_prefix) =
+                            format_subset_argument(&arg_elements, indent, ctx)?;
+                        match slots[slot_idx].take() {
+                            Some(existing) if !existing.is_empty() && !formatted.is_empty() => {
+                                slots[slot_idx] = Some(format!("{existing}\n{formatted}"));
+                            }
+                            Some(existing) if !existing.is_empty() => {
+                                slots[slot_idx] = Some(existing);
+                            }
+                            _ => {
+                                slots[slot_idx] = Some(formatted);
+                            }
+                        }
+                        has_comment_prefixed_expr_slot |= has_comment_prefix;
                     }
                 }
             }
@@ -333,7 +351,55 @@ fn collect_subset_arg_parts(
     Ok(SubsetArgParts {
         slots,
         has_comment_only_slot,
+        has_comment_prefixed_expr_slot,
     })
+}
+
+fn format_subset_argument(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(String, bool), FormatError> {
+    let mut first_non_comment_idx = None;
+    for (idx, el) in elements.iter().enumerate() {
+        if matches!(el, NodeOrToken::Token(tok) if matches!(tok.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
+        {
+            continue;
+        }
+        if matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT) {
+            continue;
+        }
+        first_non_comment_idx = Some(idx);
+        break;
+    }
+
+    let Some(expr_start) = first_non_comment_idx else {
+        return Ok((
+            format_expr_segment(elements, "subset argument", indent, ctx)?,
+            false,
+        ));
+    };
+
+    let leading_comments = elements[..expr_start]
+        .iter()
+        .filter_map(|el| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                Some(tok.text().to_string())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if leading_comments.is_empty() {
+        return Ok((
+            format_expr_segment(elements, "subset argument", indent, ctx)?,
+            false,
+        ));
+    }
+
+    let expr =
+        format_expr_with_optional_comment(&elements[expr_start..], "subset argument", indent, ctx)?;
+    Ok((format!("{}\n{expr}", leading_comments.join("\n")), true))
 }
 
 fn format_subset_args_inline_from_parts(
@@ -414,14 +480,15 @@ fn format_subset_args_multiline(
         .slots
         .first()
         .is_some_and(|slot| slot.as_deref().is_none_or(str::is_empty));
-    if leading_hole {
+    let hug_leading_hole = leading_hole && !parts.has_comment_prefixed_expr_slot;
+    if hug_leading_hole {
         out.push(',');
     }
     out.push('\n');
 
     let first_non_empty = first_non_empty_slot(parts).unwrap_or(0);
     let item_indent = ctx.indent_text(indent + 1);
-    for idx in (if leading_hole { 1 } else { 0 })..parts.slots.len() {
+    for idx in (if hug_leading_hole { 1 } else { 0 })..parts.slots.len() {
         if idx > first_non_empty
             && parts.slots[idx]
                 .as_deref()
@@ -431,6 +498,14 @@ fn format_subset_args_multiline(
         }
 
         if let Some(arg) = parts.slots[idx].as_deref() {
+            if arg.is_empty() {
+                out.push_str(&item_indent);
+                if idx + 1 < parts.slots.len() {
+                    out.push(',');
+                }
+                out.push('\n');
+                continue;
+            }
             let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
             if lines.is_empty() {
                 continue;
