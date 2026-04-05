@@ -81,6 +81,7 @@ fn fixture_names() -> &'static [&'static str] {
         "subset_basic_and_holes",
         "subset_holes_trailing_function",
         "subset_dots_and_dotdoti",
+        "subset_comments",
     ]
 }
 

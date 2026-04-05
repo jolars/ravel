@@ -1,0 +1,3 @@
+fn[
+  # dangling special case
+]

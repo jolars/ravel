@@ -269,16 +269,21 @@ fn format_subset_args(
         bracket_close_text(close_kind)
     );
     let has_multiline_arg = parts.slots.iter().flatten().any(|arg| arg.contains('\n'));
-    let force_multiline =
-        should_force_subset_multiline(&parts) || !ctx.fits_with_newlines(indent, &inline_expr);
+    let force_multiline = parts.has_comment_only_slot
+        || should_force_subset_multiline(&parts)
+        || !ctx.fits_with_newlines(indent, &inline_expr);
     if !force_multiline {
         return Ok(inline_args);
+    }
+    if parts.has_comment_only_slot {
+        return format_subset_args_multiline_wrapped(&parts, indent, ctx);
     }
     format_subset_args_multiline(&parts, indent, ctx, has_multiline_arg)
 }
 
 struct SubsetArgParts {
     slots: Vec<Option<String>>,
+    has_comment_only_slot: bool,
 }
 
 fn collect_subset_arg_parts(
@@ -288,6 +293,7 @@ fn collect_subset_arg_parts(
 ) -> Result<SubsetArgParts, FormatError> {
     let mut slots: Vec<Option<String>> = vec![None];
     let mut slot_idx = 0usize;
+    let mut has_comment_only_slot = false;
     for element in arg_list.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
@@ -295,12 +301,36 @@ fn collect_subset_arg_parts(
                 if arg_elements.is_empty() {
                     slots[slot_idx] = Some(String::new());
                 } else {
-                    slots[slot_idx] = Some(format_expr_segment(
-                        &arg_elements,
-                        "subset argument",
-                        indent,
-                        ctx,
-                    )?);
+                    let has_comment = arg_elements.iter().any(
+                        |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT),
+                    );
+                    let has_non_comment = arg_elements.iter().any(|el| match el {
+                        NodeOrToken::Node(_) => true,
+                        NodeOrToken::Token(tok) => !matches!(
+                            tok.kind(),
+                            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::COMMENT
+                        ),
+                    });
+                    if has_comment && !has_non_comment {
+                        let comment = arg_elements
+                            .iter()
+                            .find_map(|el| match el {
+                                NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                                    Some(tok.text().to_string())
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_default();
+                        slots[slot_idx] = Some(comment);
+                        has_comment_only_slot = true;
+                    } else {
+                        slots[slot_idx] = Some(format_expr_segment(
+                            &arg_elements,
+                            "subset argument",
+                            indent,
+                            ctx,
+                        )?);
+                    }
                 }
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
@@ -312,7 +342,10 @@ fn collect_subset_arg_parts(
             _ => {}
         }
     }
-    Ok(SubsetArgParts { slots })
+    Ok(SubsetArgParts {
+        slots,
+        has_comment_only_slot,
+    })
 }
 
 fn format_subset_args_inline_from_parts(
