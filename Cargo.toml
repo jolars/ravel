@@ -41,7 +41,7 @@ tower-lsp-server = "0.23.0"
 uuid = { version = "1.23.0", features = ["v4"] }
 
 [dev-dependencies]
-insta = "1.47.1"
+insta = "1.47.2"
 air_r_parser = { git = "https://github.com/posit-dev/air", rev = "4cbd36d552e27d8930cff1602d56bfd9ce4c1ed1" }
 
 [build-dependencies]
