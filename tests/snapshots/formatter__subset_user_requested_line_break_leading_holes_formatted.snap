@@ -1,0 +1,9 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+dt[, j, by = col]
+
+dt[, j, by = col]
+
+dt[, j, by = col]

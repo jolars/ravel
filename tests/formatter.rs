@@ -83,6 +83,7 @@ fn fixture_names() -> &'static [&'static str] {
         "subset_dots_and_dotdoti",
         "subset_comments",
         "subset_user_requested_line_break",
+        "subset_user_requested_line_break_leading_holes",
     ]
 }
 
