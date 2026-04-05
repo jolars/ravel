@@ -102,6 +102,7 @@ pub(crate) fn format_binary_expr(
                             | SyntaxKind::USER_OP
                             | SyntaxKind::COLON2
                             | SyntaxKind::COLON3
+                            | SyntaxKind::DOLLAR
                     )
             )
         })
@@ -123,6 +124,7 @@ pub(crate) fn format_binary_expr(
         || op_kind == SyntaxKind::COLON
         || op_kind == SyntaxKind::COLON2
         || op_kind == SyntaxKind::COLON3
+        || op_kind == SyntaxKind::DOLLAR
     {
         (
             format!("{lhs}{op_text}{rhs}"),
@@ -208,20 +210,6 @@ pub(crate) fn format_subset_expr(
             context: "missing opening bracket in subset expression",
             snippet: node.text().to_string(),
         })?;
-    let close_idx = elements
-        .iter()
-        .rposition(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == close_kind))
-        .ok_or_else(|| FormatError::AmbiguousConstruct {
-            context: "missing closing bracket in subset expression",
-            snippet: node.text().to_string(),
-        })?;
-    if close_idx <= open_idx {
-        return Err(FormatError::AmbiguousConstruct {
-            context: "invalid subset bounds",
-            snippet: node.text().to_string(),
-        });
-    }
-
     let target = format_expr_segment(&elements[..open_idx], "subset target", indent, ctx)?;
     let arg_list = elements
         .iter()

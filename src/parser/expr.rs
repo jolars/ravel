@@ -716,7 +716,6 @@ fn parse_subset_expr(
         ctx,
         target,
         lbrack_idx,
-        TokKind::RBrack,
         SyntaxKind::SUBSET_EXPR,
         diagnostics,
     )
@@ -732,7 +731,6 @@ fn parse_subset2_expr(
         ctx,
         target,
         lbrack2_idx,
-        TokKind::RBrack2,
         SyntaxKind::SUBSET2_EXPR,
         diagnostics,
     )
@@ -742,7 +740,6 @@ fn parse_bracket_expr(
     ctx: &ParserCtx<'_>,
     target: ExprParse,
     open_idx: usize,
-    close_kind: TokKind,
     node_kind: SyntaxKind,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> ExprParse {
@@ -766,9 +763,7 @@ fn parse_bracket_expr(
         }
         i = next_i;
 
-        if matches!(tokens.get(i).map(|t| &t.kind), Some(k) if *k == close_kind)
-            || tokens.get(i).is_none()
-        {
+        if is_matching_subset_close(tokens, i, node_kind) || tokens.get(i).is_none() {
             break;
         }
 
@@ -821,9 +816,28 @@ fn parse_bracket_expr(
     }
     i = next_i;
 
-    if matches!(tokens.get(i).map(|t| &t.kind), Some(k) if *k == close_kind) {
-        events.push(Event::Tok(i));
-        i += 1;
+    if is_matching_subset_close(tokens, i, node_kind) {
+        match node_kind {
+            SyntaxKind::SUBSET_EXPR => {
+                if matches!(tokens.get(i).map(|t| &t.kind), Some(TokKind::RBrack2)) {
+                    events.push(Event::Tok(i)); // consume one ] out of ]]
+                    i += 1;
+                } else {
+                    events.push(Event::Tok(i));
+                    i += 1;
+                }
+            }
+            SyntaxKind::SUBSET2_EXPR => {
+                events.push(Event::Tok(i));
+                i += 1;
+            }
+            _ => {}
+        }
+    } else if node_kind == SyntaxKind::SUBSET_EXPR
+        && matches!(previous_non_trivia_kind(tokens, i), Some(TokKind::RBrack2))
+    {
+        // `]]` may have been consumed as a single token by an inner subset node.
+        // In that case, treat the outer subset close as satisfied.
     } else if let Some(tok) = tokens.get(open_idx) {
         push_token_diagnostic(
             diagnostics,
@@ -837,6 +851,36 @@ fn parse_bracket_expr(
         start: target.start,
         end: i,
         events,
+    }
+}
+
+fn is_matching_subset_close(tokens: &[Token], idx: usize, node_kind: SyntaxKind) -> bool {
+    match node_kind {
+        SyntaxKind::SUBSET_EXPR => matches!(
+            tokens.get(idx).map(|t| &t.kind),
+            Some(TokKind::RBrack | TokKind::RBrack2)
+        ),
+        SyntaxKind::SUBSET2_EXPR => {
+            matches!(tokens.get(idx).map(|t| &t.kind), Some(TokKind::RBrack2))
+        }
+        _ => false,
+    }
+}
+
+fn previous_non_trivia_kind(tokens: &[Token], mut idx: usize) -> Option<TokKind> {
+    if idx == 0 {
+        return None;
+    }
+    idx -= 1;
+    loop {
+        let tok = tokens.get(idx)?;
+        if !matches!(tok.kind, TokKind::Whitespace | TokKind::Newline) {
+            return Some(tok.kind.clone());
+        }
+        if idx == 0 {
+            return None;
+        }
+        idx -= 1;
     }
 }
 

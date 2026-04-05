@@ -89,7 +89,7 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
         let kind = token.kind();
         if matches!(
             kind,
-            SyntaxKind::USER_OP | SyntaxKind::DOLLAR | SyntaxKind::AT | SyntaxKind::ERROR
+            SyntaxKind::USER_OP | SyntaxKind::AT | SyntaxKind::ERROR
         ) {
             return Err(FormatError::UnsupportedConstruct {
                 kind,
