@@ -27,7 +27,7 @@ rowan = "0.16.1"
 salsa = "0.26.0"
 serde = { version = "1.0.228", features = ["derive"] }
 tempfile = "3.27.0"
-tokio = { version = "1.50.0", features = [
+tokio = { version = "1.51.0", features = [
   "process",
   "rt-multi-thread",
   "io-util",
