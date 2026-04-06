@@ -123,7 +123,7 @@ fn preserves_comment_only_lines() {
 
 #[test]
 fn rejects_unsupported_constructs_explicitly() {
-    let err = format("x %foo% y\n").expect_err("user operators are unsupported currently");
+    let err = format("x @ y\n").expect_err("@ is unsupported currently");
     assert!(matches!(err, FormatError::UnsupportedConstruct { .. }));
 }
 
@@ -208,10 +208,19 @@ fn cli_format_verify_formats_stdin() {
 
 #[test]
 fn cli_format_reports_unsupported_constructs() {
-    let output = run_cli(["format"], "x %foo% y\n");
+    let output = run_cli(["format"], "x @ y\n");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("unsupported construct for formatter"));
+}
+
+#[test]
+fn formats_user_operator_binary_expr() {
+    let input = "1:3 %in% 1:5\n";
+    let expected = "1:3 %in% 1:5\n";
+    let formatted =
+        format(input).expect("user operators should be formatted as binary expressions");
+    assert_eq!(formatted, expected);
 }
 
 #[test]
