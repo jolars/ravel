@@ -141,6 +141,21 @@ pub(crate) fn format_while_expr(
     Ok(out)
 }
 
+pub(crate) fn format_repeat_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    let parts = parse_repeat_expr_parts(node)?;
+    let body = format_repeat_body(
+        parts.body.as_ref(),
+        indent,
+        ctx,
+        &parts.post_keyword_comments,
+    )?;
+    Ok(format!("repeat {body}"))
+}
+
 pub(crate) fn try_format_for_with_external_body(
     lines: &[Vec<SyntaxElement<RLanguage>>],
     line_idx: usize,
@@ -283,6 +298,64 @@ pub(crate) fn try_format_while_with_external_body(
     out.push_str(&format_while_header(&parts, indent, ctx)?);
     out.push(' ');
     out.push_str(&body);
+    if let Some(comment) = trailing_comment {
+        out.push(' ');
+        out.push_str(&comment);
+    }
+
+    Ok(Some((out, cursor - line_idx)))
+}
+
+pub(crate) fn try_format_repeat_with_external_body(
+    lines: &[Vec<SyntaxElement<RLanguage>>],
+    line_idx: usize,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<(String, usize)>, FormatError> {
+    let significant = significant_elements(&lines[line_idx]);
+    let (repeat_node, trailing_comment) = match significant.as_slice() {
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::REPEAT_EXPR => (node.clone(), None),
+        [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
+            if node.kind() == SyntaxKind::REPEAT_EXPR && tok.kind() == SyntaxKind::COMMENT =>
+        {
+            (node.clone(), Some(tok.text().to_string()))
+        }
+        _ => return Ok(None),
+    };
+
+    let parts = parse_repeat_expr_parts(&repeat_node)?;
+    if parts.body.is_some() {
+        return Ok(None);
+    }
+
+    let mut extra_body_comments = Vec::new();
+    let mut cursor = line_idx + 1;
+    while cursor < lines.len() {
+        if let Some(comment) = comment_only_line_text(&lines[cursor]) {
+            extra_body_comments.push(comment);
+            cursor += 1;
+            continue;
+        }
+        break;
+    }
+
+    let body_element = if cursor < lines.len() {
+        match significant_elements(&lines[cursor]).as_slice() {
+            [element] => Some(element.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let Some(body_element) = body_element else {
+        return Ok(None);
+    };
+
+    let mut merged_comments = parts.post_keyword_comments;
+    merged_comments.extend(extra_body_comments);
+    let body = format_repeat_body(Some(&body_element), indent, ctx, &merged_comments)?;
+
+    let mut out = format!("repeat {body}");
     if let Some(comment) = trailing_comment {
         out.push(' ');
         out.push_str(&comment);
@@ -478,6 +551,88 @@ fn format_while_body(
     }
 }
 
+fn format_repeat_body(
+    body: Option<&SyntaxElement<RLanguage>>,
+    indent: usize,
+    ctx: FormatContext,
+    prefixed_comments: &[String],
+) -> Result<String, FormatError> {
+    match body {
+        Some(NodeOrToken::Node(node)) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+            format_block_expr_with_prefixed_comments(node, indent, ctx, prefixed_comments)
+        }
+        Some(element) => {
+            let expr = format_expr_element(element, indent + 1, ctx)?;
+            let mut out = String::from("{\n");
+            for comment in prefixed_comments {
+                out.push_str(&ctx.indent_text(indent + 1));
+                out.push_str(comment);
+                out.push('\n');
+            }
+            out.push_str(&ctx.indent_text(indent + 1));
+            out.push_str(&expr);
+            out.push('\n');
+            out.push_str(&ctx.indent_text(indent));
+            out.push('}');
+            Ok(out)
+        }
+        None => {
+            if prefixed_comments.is_empty() {
+                return Ok("{}".to_string());
+            }
+            let mut out = String::from("{\n");
+            for (idx, comment) in prefixed_comments.iter().enumerate() {
+                out.push_str(&ctx.indent_text(indent + 1));
+                out.push_str(comment);
+                if idx + 1 < prefixed_comments.len() {
+                    out.push('\n');
+                }
+            }
+            out.push('\n');
+            out.push_str(&ctx.indent_text(indent));
+            out.push('}');
+            Ok(out)
+        }
+    }
+}
+
+struct RepeatExprParts {
+    post_keyword_comments: Vec<String>,
+    body: Option<SyntaxElement<RLanguage>>,
+}
+
+fn parse_repeat_expr_parts(node: &SyntaxNode) -> Result<RepeatExprParts, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let repeat_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::REPEAT_KW))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing 'repeat' keyword",
+            snippet: node.text().to_string(),
+        })?;
+
+    let mut post_keyword_comments = Vec::new();
+    let mut body = None;
+    for element in elements.iter().skip(repeat_idx + 1) {
+        if is_trivia(element.kind()) {
+            continue;
+        }
+        if let NodeOrToken::Token(tok) = element
+            && tok.kind() == SyntaxKind::COMMENT
+        {
+            post_keyword_comments.push(tok.text().to_string());
+            continue;
+        }
+        body = Some(element.clone());
+        break;
+    }
+
+    Ok(RepeatExprParts {
+        post_keyword_comments,
+        body,
+    })
+}
+
 fn significant_elements(line: &[SyntaxElement<RLanguage>]) -> Vec<SyntaxElement<RLanguage>> {
     line.iter()
         .filter(|el| !is_trivia(el.kind()))
@@ -506,10 +661,14 @@ fn line_starts_with_control_flow_loop(line: &[SyntaxElement<RLanguage>]) -> bool
     let significant = significant_elements(line);
     match significant.as_slice() {
         [NodeOrToken::Node(node)] => {
-            node.kind() == SyntaxKind::FOR_EXPR || node.kind() == SyntaxKind::WHILE_EXPR
+            node.kind() == SyntaxKind::FOR_EXPR
+                || node.kind() == SyntaxKind::WHILE_EXPR
+                || node.kind() == SyntaxKind::REPEAT_EXPR
         }
         [NodeOrToken::Node(node), NodeOrToken::Token(tok)] => {
-            (node.kind() == SyntaxKind::FOR_EXPR || node.kind() == SyntaxKind::WHILE_EXPR)
+            (node.kind() == SyntaxKind::FOR_EXPR
+                || node.kind() == SyntaxKind::WHILE_EXPR
+                || node.kind() == SyntaxKind::REPEAT_EXPR)
                 && tok.kind() == SyntaxKind::COMMENT
         }
         _ => false,
@@ -529,6 +688,9 @@ fn loop_leading_comment_count(
         [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::WHILE_EXPR => {
             (Some(node.clone()), SyntaxKind::WHILE_EXPR)
         }
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::REPEAT_EXPR => {
+            (Some(node.clone()), SyntaxKind::REPEAT_EXPR)
+        }
         [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
             if node.kind() == SyntaxKind::FOR_EXPR && tok.kind() == SyntaxKind::COMMENT =>
         {
@@ -538,6 +700,11 @@ fn loop_leading_comment_count(
             if node.kind() == SyntaxKind::WHILE_EXPR && tok.kind() == SyntaxKind::COMMENT =>
         {
             (Some(node.clone()), SyntaxKind::WHILE_EXPR)
+        }
+        [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
+            if node.kind() == SyntaxKind::REPEAT_EXPR && tok.kind() == SyntaxKind::COMMENT =>
+        {
+            (Some(node.clone()), SyntaxKind::REPEAT_EXPR)
         }
         _ => (None, SyntaxKind::ERROR),
     };
@@ -553,9 +720,15 @@ fn loop_leading_comment_count(
         ));
     }
 
+    if kind == SyntaxKind::WHILE_EXPR {
+        return Ok(Some(
+            parse_while_expr_parts(&node, indent, ctx)?
+                .leading_comments
+                .len(),
+        ));
+    }
+
     Ok(Some(
-        parse_while_expr_parts(&node, indent, ctx)?
-            .leading_comments
-            .len(),
+        parse_repeat_expr_parts(&node)?.post_keyword_comments.len(),
     ))
 }

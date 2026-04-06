@@ -3,8 +3,9 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::context::FormatContext;
 use super::render::{format_atom_token, format_block_expr_with_prefixed_comments as render_block};
 use super::rules::control_flow::{
-    format_for_expr, format_if_expr, format_while_expr, should_insert_comment_for_gap,
-    try_format_for_with_external_body, try_format_while_with_external_body,
+    format_for_expr, format_if_expr, format_repeat_expr, format_while_expr,
+    should_insert_comment_for_gap, try_format_for_with_external_body,
+    try_format_repeat_with_external_body, try_format_while_with_external_body,
 };
 use super::rules::expressions::{
     format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
@@ -128,6 +129,13 @@ fn format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatEr
             idx += consumed + 1;
             continue;
         }
+        if let Some((formatted, consumed)) =
+            try_format_repeat_with_external_body(&lines, idx, 0, ctx)?
+        {
+            out.push_str(&formatted);
+            idx += consumed + 1;
+            continue;
+        }
 
         out.push_str(&format_line(&lines[idx], 0, ctx)?);
         idx += 1;
@@ -227,6 +235,9 @@ fn format_expr_node(
     }
     if let Some(expr) = WhileExpr::cast(node.clone()) {
         return format_while_expr(expr.syntax(), indent, ctx);
+    }
+    if node.kind() == SyntaxKind::REPEAT_EXPR {
+        return format_repeat_expr(node, indent, ctx);
     }
     if let Some(expr) = BlockExpr::cast(node.clone()) {
         return format_block_expr(expr.syntax(), indent, ctx);

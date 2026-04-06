@@ -88,6 +88,7 @@ fn fixture_names() -> &'static [&'static str] {
         "parenthesized_expression_basic",
         "braced_empty_and_basics",
         "braced_empty_function_definitions",
+        "braced_empty_loops",
     ]
 }
 
