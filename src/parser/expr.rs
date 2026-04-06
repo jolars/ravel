@@ -273,7 +273,13 @@ fn parse_prefix(
                 push_token_diagnostic(diagnostics, "expected expression after '('", tok);
                 return Some(error_expr_to_line_end(tokens, i, inner_start));
             };
-            let close_idx = ctx.skip_ws_and_newlines(inner.end);
+            let mut close_idx = inner.end;
+            while matches!(
+                tokens.get(close_idx).map(|t| &t.kind),
+                Some(TokKind::Whitespace | TokKind::Newline | TokKind::Comment)
+            ) {
+                close_idx += 1;
+            }
             if !matches!(
                 tokens.get(close_idx).map(|t| &t.kind),
                 Some(TokKind::RParen)

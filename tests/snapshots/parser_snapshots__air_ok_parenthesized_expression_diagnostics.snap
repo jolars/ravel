@@ -2,10 +2,4 @@
 source: tests/parser_snapshots.rs
 expression: "format!(\"{:#?}\", output.diagnostics)"
 ---
-[
-    ParseDiagnostic {
-        message: "expected ')'",
-        start: 27,
-        end: 28,
-    },
-]
+[]

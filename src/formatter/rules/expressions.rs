@@ -1,7 +1,10 @@
 use rowan::{NodeOrToken, SyntaxElement};
 
 use super::super::context::FormatContext;
-use super::super::core::{FormatError, format_expr_segment, format_expr_with_optional_comment};
+use super::super::core::{
+    FormatError, format_expr_segment, format_expr_with_optional_comment, format_line,
+};
+use super::super::trivia::split_lines;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
 pub(crate) fn format_unary_expr(
@@ -178,13 +181,29 @@ pub(crate) fn format_paren_expr(
         });
     }
 
-    let inner = format_expr_segment(
-        &elements[open_idx + 1..close_idx],
-        "parenthesized expression",
-        indent,
-        ctx,
-    )?;
-    Ok(format!("({inner})"))
+    let inner_elements = &elements[open_idx + 1..close_idx];
+    if let Ok(inner) =
+        format_expr_with_optional_comment(inner_elements, "parenthesized expression", indent, ctx)
+    {
+        return Ok(format!("({inner})"));
+    }
+
+    let lines = split_lines(inner_elements.to_vec(), "parenthesized expression")?;
+    if lines.is_empty() {
+        return Ok("()".to_string());
+    }
+
+    let mut out = String::from("(\n");
+    for (idx, line) in lines.iter().enumerate() {
+        if idx > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format_line(line, indent + 1, ctx)?);
+    }
+    out.push('\n');
+    out.push_str(&ctx.indent_text(indent));
+    out.push(')');
+    Ok(out)
 }
 
 pub(crate) fn format_subset_expr(

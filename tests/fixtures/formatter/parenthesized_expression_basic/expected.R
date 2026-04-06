@@ -1,0 +1,22 @@
+(1)
+
+({
+  1 + 1
+})
+(function() 1 + 1)
+
+(fn(a, b, c))
+(fn_call_that_is_really_long(
+  with_really_long,
+  arguments_like_this,
+  and_this_one_too
+))
+
+((1))
+
+(
+  # comment1
+  # comment2
+  1 # comment3
+  # comment4
+) # comment5
