@@ -68,43 +68,42 @@ fn run_format(paths: Vec<PathBuf>, verify: bool, check: bool) -> ExitCode {
         return run_format_check(&paths);
     }
 
-    if paths.len() > 1 {
-        eprintln!("error: format accepts at most one input path unless --check is used");
-        return ExitCode::from(2);
-    }
-
-    let input = match read_input(paths.first().map(PathBuf::as_path)) {
-        Ok(input) => input,
-        Err(err) => {
-            eprintln!("error: {err}");
-            return ExitCode::from(2);
-        }
-    };
-
-    let formatted = match format(&input) {
-        Ok(formatted) => formatted,
-        Err(err) => {
-            eprintln!("error: {err}");
-            return ExitCode::from(1);
-        }
-    };
-
-    if verify {
-        let reformatted = match format(&formatted) {
-            Ok(reformatted) => reformatted,
+    if paths.is_empty() {
+        let input = match read_input(None) {
+            Ok(input) => input,
             Err(err) => {
-                eprintln!("error: formatted output failed verification: {err}");
+                eprintln!("error: {err}");
+                return ExitCode::from(2);
+            }
+        };
+
+        let formatted = match format(&input) {
+            Ok(formatted) => formatted,
+            Err(err) => {
+                eprintln!("error: {err}");
                 return ExitCode::from(1);
             }
         };
-        if reformatted != formatted {
-            eprintln!("error: formatter verification failed (non-idempotent output)");
-            return ExitCode::from(1);
+
+        if verify {
+            let reformatted = match format(&formatted) {
+                Ok(reformatted) => reformatted,
+                Err(err) => {
+                    eprintln!("error: formatted output failed verification: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            if reformatted != formatted {
+                eprintln!("error: formatter verification failed (non-idempotent output)");
+                return ExitCode::from(1);
+            }
         }
+
+        print!("{formatted}");
+        return ExitCode::SUCCESS;
     }
 
-    print!("{formatted}");
-    ExitCode::SUCCESS
+    run_format_write_paths(&paths, verify)
 }
 
 fn run_format_check(paths: &[PathBuf]) -> ExitCode {
@@ -124,6 +123,72 @@ fn run_format_check(paths: &[PathBuf]) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn run_format_write_paths(paths: &[PathBuf], verify: bool) -> ExitCode {
+    let files = match ravel::file_discovery::collect_r_files(paths) {
+        Ok(files) => files,
+        Err(ravel::file_discovery::FileDiscoveryError::NonRFilePath { path }) => {
+            eprintln!(
+                "error: input file {} is not an .R file; format only supports .R files",
+                path.display()
+            );
+            return ExitCode::from(2);
+        }
+        Err(ravel::file_discovery::FileDiscoveryError::WalkError { path, message }) => {
+            eprintln!("error: failed while scanning {}: {message}", path.display());
+            return ExitCode::from(2);
+        }
+    };
+    if files.is_empty() {
+        eprintln!("error: no .R files found under the provided input paths");
+        return ExitCode::from(2);
+    }
+
+    for path in files {
+        let input = match fs::read_to_string(&path) {
+            Ok(input) => input,
+            Err(err) => {
+                eprintln!("error: failed to read {}: {err}", path.display());
+                return ExitCode::from(2);
+            }
+        };
+        let formatted = match format(&input) {
+            Ok(formatted) => formatted,
+            Err(err) => {
+                eprintln!("error: failed to format {}: {err}", path.display());
+                return ExitCode::from(1);
+            }
+        };
+        if verify {
+            let reformatted = match format(&formatted) {
+                Ok(reformatted) => reformatted,
+                Err(err) => {
+                    eprintln!(
+                        "error: formatted output failed verification for {}: {err}",
+                        path.display()
+                    );
+                    return ExitCode::from(1);
+                }
+            };
+            if reformatted != formatted {
+                eprintln!(
+                    "error: formatter verification failed for {} (non-idempotent output)",
+                    path.display()
+                );
+                return ExitCode::from(1);
+            }
+            continue;
+        }
+        if formatted != input
+            && let Err(err) = fs::write(&path, formatted)
+        {
+            eprintln!("error: failed to write {}: {err}", path.display());
+            return ExitCode::from(2);
+        }
+    }
+
+    ExitCode::SUCCESS
 }
 
 fn run_lint(paths: Vec<PathBuf>, check: bool) -> ExitCode {

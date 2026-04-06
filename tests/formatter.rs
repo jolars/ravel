@@ -208,10 +208,52 @@ fn cli_format_verify_formats_stdin() {
 
 #[test]
 fn cli_format_reports_unsupported_constructs() {
-    let output = run_cli(["format"], "x @ y\n");
+    let output = run_cli(["format", "--verify"], "x @ y\n");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("unsupported construct for formatter"));
+}
+
+#[test]
+fn cli_format_writes_single_file_in_place() {
+    let dir = tempdir().expect("failed to create temp dir");
+    let file = dir.path().join("in_place.R");
+    std::fs::write(&file, "x<-1+2\n").expect("failed to write input file");
+
+    let output = run_cli_no_stdin([
+        "format",
+        file.to_str().expect("temp file path should be utf-8"),
+    ]);
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty());
+    let after = std::fs::read_to_string(&file).expect("failed to read formatted file");
+    assert_eq!(after, "x <- 1 + 2\n");
+}
+
+#[test]
+fn cli_format_writes_directory_files_in_place() {
+    let dir = tempdir().expect("failed to create temp dir");
+    let a = dir.path().join("a.R");
+    let b = dir.path().join("sub").join("b.R");
+    std::fs::create_dir_all(b.parent().expect("subdir parent should exist"))
+        .expect("failed to create nested dir");
+    std::fs::write(&a, "x<-1+2\n").expect("failed to write a.R");
+    std::fs::write(&b, "y<-3+4\n").expect("failed to write b.R");
+
+    let output = run_cli_no_stdin([
+        "format",
+        dir.path().to_str().expect("temp dir path should be utf-8"),
+    ]);
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(&a).expect("failed to read a.R"),
+        "x <- 1 + 2\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&b).expect("failed to read b.R"),
+        "y <- 3 + 4\n"
+    );
 }
 
 #[test]

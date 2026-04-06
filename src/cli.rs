@@ -38,15 +38,15 @@ pub enum Commands {
     },
     /// Format .R files
     Format {
-        /// Input file or path (stdin if omitted and --check is not set)
+        /// Input file(s) or path(s) (stdin if omitted)
         #[arg(value_name = "PATH")]
         paths: Vec<PathBuf>,
 
-        /// Verify formatting idempotence for supported inputs
+        /// Verify formatting idempotence for supported inputs (does not write files)
         #[arg(long)]
         verify: bool,
 
-        /// Check formatting of .R files under the provided paths
+        /// Check formatting of .R files under the provided paths without writing changes
         #[arg(long)]
         check: bool,
     },
