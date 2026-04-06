@@ -276,6 +276,7 @@ fn indent_multiline_arg(formatted: &str, item_indent: &str, trailing_comma: bool
 
     let item_indent_len = item_indent.len();
     if lines.len() > 1
+        && !formatted.contains("{{")
         && let Some(expr_start) = lines
             .iter()
             .position(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
@@ -411,12 +412,12 @@ fn append_trailing_comment(
     item_indent: &str,
     trailing_comma: bool,
 ) -> String {
-    let mut lines: Vec<String> = formatted.lines().map(ToString::to_string).collect();
+    let mut lines: Vec<String> = indent_multiline_arg(formatted, item_indent, false)
+        .lines()
+        .map(ToString::to_string)
+        .collect();
     if lines.is_empty() {
         return format!("{item_indent}{comment}");
-    }
-    if let Some(first) = lines.first_mut() {
-        *first = format!("{item_indent}{first}");
     }
     if let Some(last) = lines.last_mut() {
         last.push(' ');
@@ -601,7 +602,7 @@ fn try_format_call_with_trailing_block(
     let Some((last, leading)) = parts.arg_infos.split_last() else {
         return Ok(None);
     };
-    if !looks_like_trailing_block_arg(&last.formatted) {
+    if !looks_like_trailing_block_arg(&last.formatted) || last.formatted.starts_with("{{") {
         return Ok(None);
     }
     if last
@@ -777,34 +778,54 @@ fn try_format_curly_curly(
     if outer.kind() != SyntaxKind::BLOCK_EXPR {
         return Ok(None);
     }
-
-    let outer_significant: Vec<_> = outer
-        .children_with_tokens()
+    let outer_elements: Vec<_> = outer.children_with_tokens().collect();
+    let outer_significant: Vec<_> = outer_elements
+        .iter()
         .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
         .collect();
-    if outer_significant.len() != 3 {
+    let Some(NodeOrToken::Token(outer_l)) = outer_significant.first() else {
         return Ok(None);
-    }
-    let [
-        NodeOrToken::Token(outer_l),
-        NodeOrToken::Node(inner),
-        NodeOrToken::Token(outer_r),
-    ] = outer_significant.as_slice()
-    else {
+    };
+    let Some(NodeOrToken::Token(outer_r)) = outer_significant.last() else {
         return Ok(None);
     };
     if outer_l.kind() != SyntaxKind::LBRACE || outer_r.kind() != SyntaxKind::RBRACE {
         return Ok(None);
     }
-    if inner.kind() != SyntaxKind::BLOCK_EXPR {
-        return Ok(None);
+
+    let mut outer_inner_node = None::<SyntaxNode>;
+    let mut outer_leading_comments = Vec::new();
+    for element in outer_significant
+        .iter()
+        .skip(1)
+        .take(outer_significant.len().saturating_sub(2))
+    {
+        match element {
+            NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+                if outer_inner_node.is_some() {
+                    return Ok(None);
+                }
+                outer_inner_node = Some(node.clone());
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if outer_inner_node.is_some() {
+                    break;
+                }
+                outer_leading_comments.push(tok.text().to_string());
+            }
+            _ => return Ok(None),
+        }
     }
+    let Some(inner) = outer_inner_node else {
+        return Ok(None);
+    };
 
     let inner_significant: Vec<_> = inner
         .children_with_tokens()
         .filter(|el| !super::super::core::is_trivia(el.kind()))
         .collect();
-    if inner_significant.len() < 2 {
+    if inner_significant.len() < 3 {
         return Ok(None);
     }
     let Some(NodeOrToken::Token(inner_l)) = inner_significant.first() else {
@@ -817,15 +838,102 @@ fn try_format_curly_curly(
         return Ok(None);
     }
 
-    let inner_body = &inner_significant[1..inner_significant.len() - 1];
-    if inner_body.is_empty() {
+    let inner_payload = &inner_significant[1..inner_significant.len() - 1];
+    let expr_count = inner_payload
+        .iter()
+        .filter(|el| !matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT))
+        .count();
+    if expr_count != 1 {
         return Ok(None);
     }
-    let body = format_expr_segment(inner_body, "curly-curly inner body", indent, ctx)?;
-    if body.contains('\n') || body.trim_start().starts_with('#') {
-        return Ok(None);
+
+    let mut inner_pre_comments = Vec::new();
+    let mut inner_after_expr_comments = Vec::new();
+    let mut inner_expr = None::<SyntaxElement<RLanguage>>;
+    for element in inner_payload {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if inner_expr.is_some() {
+                    inner_after_expr_comments.push(tok.text().to_string());
+                } else {
+                    inner_pre_comments.push(tok.text().to_string());
+                }
+            }
+            _ => {
+                if inner_expr.is_some() {
+                    return Ok(None);
+                }
+                inner_expr = Some(element.clone());
+            }
+        }
     }
-    Ok(Some(format!("{{{{ {body} }}}}")))
+    let Some(inner_expr) = inner_expr else {
+        return Ok(None);
+    };
+    let rendered_expr = format_expr_element(&inner_expr, indent + 1, ctx)?;
+
+    let outer_inner_idx = outer_elements
+        .iter()
+        .position(
+            |el| matches!(el, NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR),
+        )
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing inner block for curly-curly",
+            snippet: outer.text().to_string(),
+        })?;
+    let mut inline_trailing_comment = None::<String>;
+    let mut outer_post_comments = Vec::new();
+    let mut saw_newline = false;
+    for element in outer_elements.iter().skip(outer_inner_idx + 1) {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE => saw_newline = true,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::WHITESPACE => {}
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if !saw_newline && inline_trailing_comment.is_none() {
+                    inline_trailing_comment = Some(tok.text().to_string());
+                } else {
+                    outer_post_comments.push(tok.text().to_string());
+                }
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RBRACE => break,
+            _ => return Ok(None),
+        }
+    }
+
+    if outer_leading_comments.is_empty()
+        && inner_pre_comments.is_empty()
+        && inner_after_expr_comments.is_empty()
+        && outer_post_comments.is_empty()
+        && inline_trailing_comment.is_none()
+    {
+        let inline = format!("{{{{ {rendered_expr} }}}}");
+        if ctx.fits_inline(indent, &inline) {
+            return Ok(Some(inline));
+        }
+    }
+
+    let mut out_lines = Vec::new();
+    out_lines.extend(outer_leading_comments);
+    out_lines.push("{{".to_string());
+    let inner_indent = ctx.indent_text(1);
+    for comment in inner_pre_comments {
+        out_lines.push(format!("{inner_indent}{comment}"));
+    }
+    for line in rendered_expr.lines() {
+        out_lines.push(format!("{inner_indent}{line}"));
+    }
+    for comment in inner_after_expr_comments {
+        out_lines.push(format!("{inner_indent}{comment}"));
+    }
+    let mut closing = "}}".to_string();
+    if let Some(comment) = inline_trailing_comment {
+        closing.push(' ');
+        closing.push_str(&comment);
+    }
+    out_lines.push(closing);
+    out_lines.extend(outer_post_comments);
+
+    Ok(Some(out_lines.join("\n")))
 }
 
 fn format_named_arg_with_assignment_node(

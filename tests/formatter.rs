@@ -91,6 +91,7 @@ fn fixture_names() -> &'static [&'static str] {
         "braced_empty_loops",
         "braced_empty_if_forms",
         "braced_curly_curly_basics",
+        "braced_curly_curly_advanced",
     ]
 }
 
