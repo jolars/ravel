@@ -139,7 +139,7 @@ pub(crate) fn format_binary_expr(
             format!("{lhs}\n{}{} {rhs}", ctx.indent_text(indent + 1), op_text),
         )
     };
-    if op_kind == SyntaxKind::PIPE {
+    if op_kind == SyntaxKind::PIPE || (op_kind == SyntaxKind::USER_OP && op_text == "%>%") {
         return Ok(format!(
             "{lhs} {op_text}\n{}{}",
             ctx.indent_text(indent + 1),

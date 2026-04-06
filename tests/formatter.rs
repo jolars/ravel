@@ -152,6 +152,17 @@ fn wraps_binary_expression_when_width_is_exceeded() {
 }
 
 #[test]
+fn formats_magrittr_pipe_like_native_pipe() {
+    let input = "df %>% foo(a = 1) %>% bar(b = 2, c = 3)\n";
+    let expected = "df %>%\n  foo(a = 1) %>%\n  bar(b = 2, c = 3)\n";
+    let formatted = format(input).expect("format should succeed");
+    assert_eq!(formatted, expected);
+
+    let reformatted = format(&formatted).expect("reformat should succeed");
+    assert_eq!(reformatted, expected);
+}
+
+#[test]
 fn wraps_call_arguments_when_width_is_exceeded() {
     let input = "call(first_arg, second_argument, third)\n";
     let style = FormatStyle {
