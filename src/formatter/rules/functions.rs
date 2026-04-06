@@ -870,6 +870,9 @@ fn try_format_curly_curly(
     let Some(inner_expr) = inner_expr else {
         return Ok(None);
     };
+    if !matches!(&inner_expr, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::IDENT) {
+        return Ok(None);
+    }
     let rendered_expr = format_expr_element(&inner_expr, indent + 1, ctx)?;
 
     let outer_inner_idx = outer_elements
@@ -1446,6 +1449,26 @@ fn format_function_parameters_without_comments(
     for param in &params {
         out.push(format_function_parameter(param, indent, ctx)?);
     }
+    if out
+        .iter()
+        .any(|param| param.contains("= {\n  {\n") || param.contains("= {\n    {\n"))
+    {
+        let mut multiline = String::new();
+        multiline.push('\n');
+        for (idx, param) in out.iter().enumerate() {
+            for line in param.lines() {
+                multiline.push_str(&ctx.indent_text(indent + 1));
+                multiline.push_str(line);
+                multiline.push('\n');
+            }
+            if idx + 1 < out.len() {
+                let insert_at = multiline.trim_end_matches('\n').len();
+                multiline.insert(insert_at, ',');
+            }
+        }
+        multiline.push_str(&ctx.indent_text(indent));
+        return Ok(multiline);
+    }
     let inline = out.join(", ");
     if ctx.fits_with_newlines(indent, &format!("function({inline}) {{}}")) {
         return Ok(inline);
@@ -1528,7 +1551,13 @@ fn format_expr_or_braced_tokens(
     }
 
     let inner = &significant[1..significant.len() - 1];
-    let inner_text = format_expr_with_optional_comment(inner, context, indent + 1, ctx)?;
+    let inner_text = match format_expr_with_optional_comment(inner, context, indent + 1, ctx) {
+        Ok(inner_text) => inner_text,
+        Err(FormatError::AmbiguousConstruct { .. }) => {
+            format_expr_tokens_via_parser(inner, context, indent + 1, ctx)?
+        }
+        Err(err) => return Err(err),
+    };
     Ok(format!(
         "{{\n{}{}\n{}}}",
         ctx.indent_text(indent + 1),
