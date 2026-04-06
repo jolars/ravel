@@ -93,7 +93,6 @@ easy -> medium -> hard.
 - [x] `ok/semicolons/semicolon-start-of-file-02.R` (easy)
 - [x] `ok/semicolons/semicolons.R` (easy)
 - [x] `ok/if_statement.R` (easy)
-
 - [x] `ok/unary_expressions.R` (medium)
 - [x] `ok/subset.R` (medium)
 - [x] `ok/subset2.R` (medium)
@@ -106,7 +105,6 @@ easy -> medium -> hard.
 - [x] `ok/value/integer_value.R` (medium)
 - [x] `ok/value/string_value.R` (medium)
 - [x] `ok/crlf/multiline_string_value.R` (medium)
-
 - [x] `ok/keyword.R` (hard)
 - [x] `ok/repeat_statement.R` (hard)
 - [x] `ok/dots.R` (hard)
