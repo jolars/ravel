@@ -118,8 +118,8 @@ pub(crate) fn format_binary_expr(
         NodeOrToken::Token(tok) => (tok.kind(), tok.text().to_string()),
         NodeOrToken::Node(_) => unreachable!(),
     };
-    let lhs = format_expr_segment(&elements[..op_idx], "binary lhs", indent, ctx)?;
-    let rhs = format_expr_segment(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
+    let lhs = format_binary_side(&elements[..op_idx], "binary lhs", indent, ctx)?;
+    let rhs = format_binary_side(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
     if op_kind == SyntaxKind::COLON2 || op_kind == SyntaxKind::COLON3 {
         return Ok(format!("{lhs}{op_text}{rhs}"));
     }
@@ -151,6 +151,85 @@ pub(crate) fn format_binary_expr(
     }
 
     Ok(multiline)
+}
+
+fn format_binary_side(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<String, FormatError> {
+    if let Some(curly_curly) = try_format_curly_curly(elements, indent, ctx)? {
+        return Ok(curly_curly);
+    }
+    format_expr_segment(elements, context, indent, ctx)
+}
+
+fn try_format_curly_curly(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<String>, FormatError> {
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    let [NodeOrToken::Node(outer)] = significant.as_slice() else {
+        return Ok(None);
+    };
+    if outer.kind() != SyntaxKind::BLOCK_EXPR {
+        return Ok(None);
+    }
+
+    let outer_significant: Vec<_> = outer
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if outer_significant.len() != 3 {
+        return Ok(None);
+    }
+    let [
+        NodeOrToken::Token(outer_l),
+        NodeOrToken::Node(inner),
+        NodeOrToken::Token(outer_r),
+    ] = outer_significant.as_slice()
+    else {
+        return Ok(None);
+    };
+    if outer_l.kind() != SyntaxKind::LBRACE || outer_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+    if inner.kind() != SyntaxKind::BLOCK_EXPR {
+        return Ok(None);
+    }
+
+    let inner_significant: Vec<_> = inner
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if inner_significant.len() < 2 {
+        return Ok(None);
+    }
+    let Some(NodeOrToken::Token(inner_l)) = inner_significant.first() else {
+        return Ok(None);
+    };
+    let Some(NodeOrToken::Token(inner_r)) = inner_significant.last() else {
+        return Ok(None);
+    };
+    if inner_l.kind() != SyntaxKind::LBRACE || inner_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+
+    let inner_body = &inner_significant[1..inner_significant.len() - 1];
+    if inner_body.is_empty() {
+        return Ok(None);
+    }
+    let body = format_expr_segment(inner_body, "curly-curly inner body", indent, ctx)?;
+    if body.contains('\n') || body.trim_start().starts_with('#') {
+        return Ok(None);
+    }
+    Ok(Some(format!("{{{{ {body} }}}}")))
 }
 
 pub(crate) fn format_paren_expr(

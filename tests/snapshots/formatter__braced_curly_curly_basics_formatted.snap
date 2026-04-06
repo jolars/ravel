@@ -1,0 +1,9 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+fn({{ var }})
+fn({{ var }}, x, {{ var }})
+
+fn(mean({{ var }}))
+fn({{ var }} + 1)
