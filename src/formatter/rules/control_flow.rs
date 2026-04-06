@@ -3,7 +3,7 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_block_expr_with_prefixed_comments, format_expr_element,
-    format_expr_segment, is_trivia,
+    format_expr_segment, format_expr_with_optional_comment, is_trivia,
 };
 use crate::ast::{AstNode, ForExpr, ForExprParts, IfExpr, WhileExpr, WhileExprParts};
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
@@ -53,7 +53,9 @@ pub(crate) fn format_if_expr(
         })?;
 
     let condition = format_expr_segment(&condition_elements, "if condition", indent, ctx)?;
-    let then_expr = format_expr_segment(&then_elements, "if then branch", indent, ctx)?;
+    let (mut then_expr, _then_is_block, interstitial_comments, interstitial_attach_to_then) =
+        format_if_then_branch_with_comments(&then_elements, indent, ctx)?;
+    let then_is_block = branch_starts_with_block(&then_elements);
 
     let mut out = format!("if ({condition}) {then_expr}");
     if if_expr.else_keyword().is_some() {
@@ -64,11 +66,263 @@ pub(crate) fn format_if_expr(
                     context: "missing else branch",
                     snippet: node.text().to_string(),
                 })?;
-        let else_expr = format_expr_segment(&else_elements, "if else branch", indent, ctx)?;
+        let mut else_expr = format_if_branch(&else_elements, indent, ctx, true)?;
+        let else_is_block = branch_starts_with_block(&else_elements);
+        if !interstitial_comments.is_empty() {
+            if then_is_block && interstitial_attach_to_then {
+                then_expr =
+                    prepend_comments_to_branch(&then_expr, &interstitial_comments, indent, ctx);
+                out = format!("if ({condition}) {then_expr}");
+            } else {
+                else_expr =
+                    prepend_comments_to_branch(&else_expr, &interstitial_comments, indent, ctx);
+            }
+        }
+        if then_is_block && !else_is_block {
+            else_expr = wrap_branch_in_block(&else_expr, &[], indent, ctx);
+        } else if !then_is_block && else_is_block {
+            then_expr = wrap_branch_in_block(&then_expr, &[], indent, ctx);
+            out = format!("if ({condition}) {then_expr}");
+        }
         out.push_str(" else ");
         out.push_str(&else_expr);
     }
     Ok(out)
+}
+
+fn format_if_then_branch_with_comments(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(String, bool, Vec<String>, bool), FormatError> {
+    let significant = significant_elements(elements);
+    if significant.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "if then branch is empty",
+            snippet: String::new(),
+        });
+    }
+    if let Some(first) = significant.first()
+        && matches!(first, NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR)
+    {
+        let block =
+            format_expr_segment(std::slice::from_ref(first), "if then branch", indent, ctx)?;
+        let comments = significant
+            .iter()
+            .skip(1)
+            .filter_map(|el| match el {
+                NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                    Some(tok.text().to_string())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let attach_to_then = comments_attach_to_then_block(elements);
+        return Ok((block, true, comments, attach_to_then));
+    }
+    Ok((
+        format_if_branch(elements, indent, ctx, false)?,
+        false,
+        Vec::new(),
+        false,
+    ))
+}
+
+fn comments_attach_to_then_block(elements: &[SyntaxElement<RLanguage>]) -> bool {
+    let mut first_block_idx = None;
+    let mut first_comment_idx = None;
+    for (idx, el) in elements.iter().enumerate() {
+        match el {
+            NodeOrToken::Node(node)
+                if first_block_idx.is_none() && node.kind() == SyntaxKind::BLOCK_EXPR =>
+            {
+                first_block_idx = Some(idx);
+            }
+            NodeOrToken::Token(tok)
+                if first_block_idx.is_some()
+                    && first_comment_idx.is_none()
+                    && tok.kind() == SyntaxKind::COMMENT =>
+            {
+                first_comment_idx = Some(idx);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let (Some(block_idx), Some(comment_idx)) = (first_block_idx, first_comment_idx) else {
+        return false;
+    };
+    !elements[block_idx + 1..comment_idx]
+        .iter()
+        .any(|el| el.kind() == SyntaxKind::NEWLINE)
+}
+
+fn branch_starts_with_block(elements: &[SyntaxElement<RLanguage>]) -> bool {
+    significant_elements(elements).first().is_some_and(
+        |el| matches!(el, NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR),
+    )
+}
+
+fn prepend_comments_to_branch(
+    rendered: &str,
+    comments: &[String],
+    indent: usize,
+    ctx: FormatContext,
+) -> String {
+    if comments.is_empty() {
+        return rendered.to_string();
+    }
+    if let Some(inner) = rendered
+        .strip_prefix("{\n")
+        .and_then(|rest| rest.strip_suffix("\n}"))
+    {
+        let mut out = String::from("{\n");
+        for comment in comments {
+            out.push_str(&ctx.indent_text(indent + 1));
+            out.push_str(comment);
+            out.push('\n');
+        }
+        if !inner.is_empty() {
+            out.push_str(inner);
+            out.push('\n');
+        }
+        out.push_str(&ctx.indent_text(indent));
+        out.push('}');
+        return out;
+    }
+    wrap_branch_in_block(rendered, comments, indent, ctx)
+}
+
+fn wrap_branch_in_block(
+    rendered: &str,
+    comments: &[String],
+    indent: usize,
+    ctx: FormatContext,
+) -> String {
+    if rendered == "{}" && comments.is_empty() {
+        return "{}".to_string();
+    }
+    let mut out = String::from("{\n");
+    for comment in comments {
+        out.push_str(&ctx.indent_text(indent + 1));
+        out.push_str(comment);
+        out.push('\n');
+    }
+    if rendered != "{}" {
+        for line in rendered.lines() {
+            out.push_str(&ctx.indent_text(indent + 1));
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out.push_str(&ctx.indent_text(indent));
+    out.push('}');
+    out
+}
+
+fn format_if_branch(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+    keep_trailing_comment: bool,
+) -> Result<String, FormatError> {
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if significant.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "if branch is empty",
+            snippet: String::new(),
+        });
+    }
+
+    let mut start = 0usize;
+    let mut leading_comments = Vec::new();
+    while start < significant.len() {
+        match &significant[start] {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                leading_comments.push(tok.text().to_string());
+                start += 1;
+            }
+            _ => break,
+        }
+    }
+
+    let mut end = significant.len();
+    let trailing_comment = if keep_trailing_comment
+        && end > start
+        && matches!(
+            significant.last(),
+            Some(NodeOrToken::Token(tok)) if tok.kind() == SyntaxKind::COMMENT
+        ) {
+        end -= 1;
+        match &significant[end] {
+            NodeOrToken::Token(tok) => Some(tok.text().to_string()),
+            NodeOrToken::Node(_) => None,
+        }
+    } else {
+        None
+    };
+
+    let core = &significant[start..end];
+    if core.is_empty() {
+        return Ok(match trailing_comment {
+            Some(comment) => comment,
+            None => "{}".to_string(),
+        });
+    }
+
+    let mut rendered = if core.len() == 1 {
+        match &core[0] {
+            NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+                format_block_expr_with_prefixed_comments(node, indent, ctx, &leading_comments)?
+            }
+            _ => {
+                if leading_comments.is_empty() {
+                    format_expr_with_optional_comment(core, "if branch", indent, ctx)?
+                } else {
+                    let expr =
+                        format_expr_with_optional_comment(core, "if branch", indent + 1, ctx)?;
+                    let mut out = String::from("{\n");
+                    for comment in &leading_comments {
+                        out.push_str(&ctx.indent_text(indent + 1));
+                        out.push_str(comment);
+                        out.push('\n');
+                    }
+                    out.push_str(&ctx.indent_text(indent + 1));
+                    out.push_str(&expr);
+                    out.push('\n');
+                    out.push_str(&ctx.indent_text(indent));
+                    out.push('}');
+                    out
+                }
+            }
+        }
+    } else if leading_comments.is_empty() {
+        format_expr_with_optional_comment(core, "if branch", indent, ctx)?
+    } else {
+        let expr = format_expr_with_optional_comment(core, "if branch", indent + 1, ctx)?;
+        let mut out = String::from("{\n");
+        for comment in &leading_comments {
+            out.push_str(&ctx.indent_text(indent + 1));
+            out.push_str(comment);
+            out.push('\n');
+        }
+        out.push_str(&ctx.indent_text(indent + 1));
+        out.push_str(&expr);
+        out.push('\n');
+        out.push_str(&ctx.indent_text(indent));
+        out.push('}');
+        out
+    };
+
+    if let Some(comment) = trailing_comment {
+        rendered.push(' ');
+        rendered.push_str(&comment);
+    }
+    Ok(rendered)
 }
 
 pub(crate) fn format_for_expr(
@@ -361,6 +615,72 @@ pub(crate) fn try_format_repeat_with_external_body(
         out.push_str(&comment);
     }
 
+    Ok(Some((out, cursor - line_idx)))
+}
+
+pub(crate) fn try_format_if_with_external_body(
+    lines: &[Vec<SyntaxElement<RLanguage>>],
+    line_idx: usize,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<(String, usize)>, FormatError> {
+    let significant = significant_elements(&lines[line_idx]);
+    let (if_node, trailing_comment) = match significant.as_slice() {
+        [NodeOrToken::Node(node)] if node.kind() == SyntaxKind::IF_EXPR => (node.clone(), None),
+        [NodeOrToken::Node(node), NodeOrToken::Token(tok)]
+            if node.kind() == SyntaxKind::IF_EXPR && tok.kind() == SyntaxKind::COMMENT =>
+        {
+            (node.clone(), Some(tok.text().to_string()))
+        }
+        _ => return Ok(None),
+    };
+    let if_expr = IfExpr::cast(if_node).ok_or_else(|| FormatError::AmbiguousConstruct {
+        context: "invalid if expression node",
+        snippet: String::new(),
+    })?;
+    if if_expr.else_keyword().is_some() {
+        return Ok(None);
+    }
+
+    let then_elements = if_expr
+        .then_elements()
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing if branch",
+            snippet: String::new(),
+        })?;
+    let then_significant = significant_elements(&then_elements);
+    let then_comment = match then_significant.as_slice() {
+        [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::COMMENT => tok.text().to_string(),
+        _ => return Ok(None),
+    };
+
+    let mut cursor = line_idx + 1;
+    while cursor < lines.len() && significant_elements(&lines[cursor]).is_empty() {
+        cursor += 1;
+    }
+    if cursor >= lines.len() {
+        return Ok(None);
+    }
+    let body_element = match significant_elements(&lines[cursor]).as_slice() {
+        [el] => el.clone(),
+        _ => return Ok(None),
+    };
+
+    let condition_elements =
+        if_expr
+            .condition_elements()
+            .ok_or_else(|| FormatError::AmbiguousConstruct {
+                context: "missing if condition",
+                snippet: String::new(),
+            })?;
+    let condition = format_expr_segment(&condition_elements, "if condition", indent, ctx)?;
+    let body_expr = format_expr_element(&body_element, indent + 1, ctx)?;
+    let body = wrap_branch_in_block(&body_expr, &[then_comment], indent, ctx);
+    let mut out = format!("if ({condition}) {body}");
+    if let Some(comment) = trailing_comment {
+        out.push(' ');
+        out.push_str(&comment);
+    }
     Ok(Some((out, cursor - line_idx)))
 }
 

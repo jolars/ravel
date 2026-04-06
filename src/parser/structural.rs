@@ -101,13 +101,21 @@ pub(crate) fn parse_if_expr(
         cursor = recovery;
     }
 
-    let else_idx = ctx.skip_ws(cursor);
+    let mut else_idx = ctx.skip_ws_and_newlines(cursor);
+    while matches!(
+        tokens.get(else_idx).map(|t| &t.kind),
+        Some(TokKind::Comment)
+    ) {
+        else_idx += 1;
+        else_idx = ctx.skip_ws_and_newlines(else_idx);
+    }
     if matches!(tokens.get(else_idx).map(|t| &t.kind), Some(TokKind::ElseKw)) {
         push_range(&mut events, cursor, else_idx);
         events.push(Event::Tok(else_idx));
         cursor = else_idx + 1;
+        let else_start = ctx.skip_ws_and_newlines(cursor);
 
-        if let Some(parsed_else) = parse_expr(tokens, cursor, 0, diagnostics) {
+        if let Some(parsed_else) = parse_expr(tokens, else_start, 0, diagnostics) {
             push_range(&mut events, cursor, parsed_else.start);
             events.extend(parsed_else.events);
             cursor = parsed_else.end;
@@ -117,7 +125,13 @@ pub(crate) fn parse_if_expr(
                 "expected expression after 'else'",
                 &tokens[else_idx],
             );
-            let recovery = ctx.skip_ws(cursor);
+            let mut recovery = cursor;
+            while matches!(
+                tokens.get(recovery).map(|t| &t.kind),
+                Some(TokKind::Whitespace | TokKind::Comment)
+            ) {
+                recovery += 1;
+            }
             push_range(&mut events, cursor, recovery);
             push_empty_error_node(&mut events);
             cursor = recovery;
