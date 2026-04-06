@@ -87,6 +87,7 @@ fn fixture_names() -> &'static [&'static str] {
         "subset_comments_after_holes",
         "parenthesized_expression_basic",
         "braced_empty_and_basics",
+        "braced_empty_function_definitions",
     ]
 }
 

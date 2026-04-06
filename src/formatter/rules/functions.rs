@@ -61,7 +61,10 @@ pub(crate) fn format_call_expr(
 
     let formatted_args = format_arg_list_from_parts(&parts, &arg_list)?;
     let inline = format!("{callee}({formatted_args})");
-    if !parts.has_comment_arg && ctx.fits_inline(indent, &inline) {
+    if !parts.has_comment_arg
+        && !should_force_multiline_for_named_function_args(&parts)
+        && ctx.fits_inline(indent, &inline)
+    {
         return Ok(inline);
     }
 
@@ -490,6 +493,23 @@ struct CallArgParts {
     comma_count: usize,
     has_non_empty_arg: bool,
     has_comment_arg: bool,
+}
+
+fn should_force_multiline_for_named_function_args(parts: &CallArgParts) -> bool {
+    let non_empty_count = parts
+        .arg_infos
+        .iter()
+        .filter(|arg| !arg.formatted.is_empty())
+        .count();
+    if non_empty_count <= 1 {
+        return false;
+    }
+    let named_function_args = parts
+        .arg_infos
+        .iter()
+        .filter(|arg| arg.is_named && arg.formatted.contains("function("))
+        .count();
+    named_function_args >= 2
 }
 
 fn collect_call_arg_parts(
@@ -1319,7 +1339,7 @@ fn format_function_parameters_without_comments(
         out.push(format_function_parameter(param, indent, ctx)?);
     }
     let inline = out.join(", ");
-    if ctx.fits_with_newlines(indent, &format!("function({inline})")) {
+    if ctx.fits_with_newlines(indent, &format!("function({inline}) {{}}")) {
         return Ok(inline);
     }
 

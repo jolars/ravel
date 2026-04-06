@@ -1,0 +1,19 @@
+function() {}
+
+stub <- function() {}
+
+list(
+  a = function() {},
+  b = function() {}
+)
+
+function(a_really_long_argument, another_really_long_argument, another_longgg) {}
+
+function() {} # comment
+
+function() # comment
+  {}
+
+function()
+  # comment
+  {}
