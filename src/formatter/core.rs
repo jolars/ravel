@@ -294,8 +294,31 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     if let Some(expr) = IfExpr::cast(node.clone()) {
         return ir_if_expr(expr.syntax(), indent, ctx);
     }
-    // Not-yet-migrated constructs bridge through the legacy renderer.
-    Ok(Ir::verbatim(legacy_format_expr_node(node, indent, ctx)?))
+    // Heavy arg-list constructs (subset/call/function) keep their specialized
+    // renderers and compose into the IR verbatim: their wrapping is an
+    // idiosyncratic string algorithm that does not map to a clean IR group, so a
+    // faithful port would change output. Native IR arg-wrapping is a follow-up.
+    if matches!(
+        node.kind(),
+        SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
+    ) {
+        return Ok(Ir::verbatim(format_subset_expr(node, indent, ctx)?));
+    }
+    if let Some(expr) = CallExpr::cast(node.clone()) {
+        return Ok(Ir::verbatim(format_call_expr(expr.syntax(), indent, ctx)?));
+    }
+    if let Some(expr) = FunctionExpr::cast(node.clone()) {
+        return Ok(Ir::verbatim(format_function_expr(
+            expr.syntax(),
+            indent,
+            ctx,
+        )?));
+    }
+
+    Err(FormatError::UnsupportedConstruct {
+        kind: node.kind(),
+        snippet: node.text().to_string(),
+    })
 }
 
 /// Atom tokens (identifiers, literals, `!`) become plain text. Reuses the legacy
