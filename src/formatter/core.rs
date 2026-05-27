@@ -209,13 +209,35 @@ pub(super) fn format_expr_element(
     indent: usize,
     ctx: FormatContext,
 ) -> Result<String, FormatError> {
+    let ir = ir_expr_element(element, indent, ctx)?;
+    Ok(Printer::new(ctx.style()).print_at(&ir, indent))
+}
+
+/// IR dispatch for an element. Migrated constructs build real IR; the rest fall
+/// back to the legacy string formatter wrapped as a `Verbatim` node (Bridge A).
+pub(super) fn ir_expr_element(
+    element: &SyntaxElement<RLanguage>,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
     match element {
-        NodeOrToken::Node(node) => format_expr_node(node, indent, ctx),
-        NodeOrToken::Token(token) => format_atom_token(token),
+        NodeOrToken::Node(node) => ir_expr_node(node, indent, ctx),
+        NodeOrToken::Token(token) => ir_atom_token(token),
     }
 }
 
-fn format_expr_node(
+fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<Ir, FormatError> {
+    // Not-yet-migrated constructs bridge through the legacy renderer.
+    Ok(Ir::verbatim(legacy_format_expr_node(node, indent, ctx)?))
+}
+
+/// Atom tokens (identifiers, literals, `!`) become plain text. Reuses the legacy
+/// token validation so unsupported tokens keep raising `UnsupportedConstruct`.
+fn ir_atom_token(token: &rowan::SyntaxToken<RLanguage>) -> Result<Ir, FormatError> {
+    Ok(Ir::text(format_atom_token(token)?))
+}
+
+fn legacy_format_expr_node(
     node: &SyntaxNode,
     indent: usize,
     ctx: FormatContext,

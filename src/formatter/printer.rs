@@ -99,9 +99,24 @@ impl Printer {
         }
     }
 
+    /// Print a complete document starting at column 0.
     pub(crate) fn print(&self, ir: &Ir) -> String {
+        self.run(ir, 0, 0)
+    }
+
+    /// Print an expression that will be placed at indent level `indent_level`,
+    /// without emitting the leading indent on the first line (the caller does
+    /// that). The starting column accounts for the indent so width decisions
+    /// match where the expression actually sits.
+    pub(crate) fn print_at(&self, ir: &Ir, indent_level: usize) -> String {
+        let base = indent_level * self.indent_unit;
+        self.run(ir, base, base)
+    }
+
+    fn run(&self, ir: &Ir, base_indent: usize, init_col: usize) -> String {
         let mut w = Writer::new();
-        let mut stack: Vec<(usize, Mode, &Ir)> = vec![(0, Mode::Break, ir)];
+        w.col = init_col;
+        let mut stack: Vec<(usize, Mode, &Ir)> = vec![(base_indent, Mode::Break, ir)];
         while let Some((indent, mode, node)) = stack.pop() {
             match node {
                 Ir::Nil => {}
