@@ -2,6 +2,7 @@ use rowan::{NodeOrToken, SyntaxElement, SyntaxToken};
 
 use super::context::FormatContext;
 use super::core::FormatError;
+use super::ir::Ir;
 use super::trivia::{is_trivia, split_lines};
 
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
@@ -10,6 +11,67 @@ type FormatLineFn =
     fn(&[SyntaxElement<RLanguage>], usize, FormatContext) -> Result<String, FormatError>;
 type FormatExprElementFn =
     fn(&SyntaxElement<RLanguage>, usize, FormatContext) -> Result<String, FormatError>;
+type IrLineFn = fn(&[SyntaxElement<RLanguage>], usize, FormatContext) -> Result<Ir, FormatError>;
+
+/// IR counterpart of [`format_block_expr_with_prefixed_comments`]. The body is
+/// always multi-line: each statement (and any leading prefixed comment) sits on
+/// its own indented line via hard breaks, with the closing brace dedented to the
+/// block's own indent. An empty block with no prefixed comments collapses to
+/// `{}`.
+pub(super) fn ir_block_expr_with_prefixed_comments(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+    prefixed_comments: &[String],
+    ir_line: IrLineFn,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let open_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LBRACE))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '{' in block",
+            snippet: node.text().to_string(),
+        })?;
+    let close_idx = elements
+        .iter()
+        .rposition(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RBRACE))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '}' in block",
+            snippet: node.text().to_string(),
+        })?;
+    if close_idx <= open_idx {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "invalid block bounds",
+            snippet: node.text().to_string(),
+        });
+    }
+
+    let lines = split_lines(elements[open_idx + 1..close_idx].to_vec(), "block body")?;
+
+    let mut items: Vec<Ir> = Vec::new();
+    for comment in prefixed_comments {
+        items.push(Ir::text(comment.clone()));
+    }
+    for line in &lines {
+        items.push(ir_line(line, indent + 1, ctx)?);
+    }
+    if items.is_empty() {
+        return Ok(Ir::text("{}"));
+    }
+
+    let body = Ir::concat(
+        items
+            .into_iter()
+            .map(|it| Ir::concat([Ir::hard_line(), it])),
+    );
+    Ok(Ir::concat([
+        Ir::text("{"),
+        Ir::indent(body),
+        Ir::hard_line(),
+        Ir::text("}"),
+    ]))
+}
 
 pub(super) fn format_block_expr_with_prefixed_comments(
     node: &SyntaxNode,
