@@ -270,6 +270,31 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       (`src/formatter/context.rs`) — the latter survive only for the
       string-based control-flow loop-body / external-body helpers in `rules/`,
       so they go when control flow is migrated.
+- [ ] **Lift the single-pass printer limit (conditional-group / candidate
+      layouts).** *(own session — printer-core change)* The printer
+      (`src/formatter/printer.rs`) is single-pass and greedy: each `Group` is
+      wholly flat or wholly broken, and `fits` (line 168) measures only flat,
+      forcing nested groups flat too. So it cannot reproduce the legacy
+      two-phase "format the inner construct, *then* measure" decision — e.g.
+      "keep the call flat **and** break the trailing function's params"
+      (`map(x, function(<long params>) { 1 })`, the intentional diff guarded by
+      `call_trailing_inline_function`). Fix: add a Prettier-style
+      **`conditionalGroup`** — an ordered list of candidate layouts (C0 all
+      flat; C1 call flat + inner laid out by its own natural breaks; C2
+      expanded); the printer picks the first whose **first line fits**, where
+      the measurement lets nested groups break naturally and treats the first
+      resulting newline as success. Verified on paper to restore byte-identical
+      legacy output for the whole `call_trailing_inline_function` fixture (so
+      the intentional diff can be reverted). `group_hug` is then just a 2-state
+      conditionalGroup (`[hugged, expanded]`), so this can unify/replace it, and
+      it unblocks every future `fits_with_newlines`-based migration (comment
+      relocation, control flow). Lighter-weight alternative: make the hug `fits`
+      *break-aware* (let nested groups break, succeed at the first newline) —
+      ~10 lines but mutates shared hug semantics, so it needs the full
+      fixture+corpus suite to confirm no regressions. Tenet 1 holds either way
+      (choice is content+width driven, candidates built from content not input
+      breaks). See memory `printer-cannot-two-phase-measure` /
+      `printer-fits-is-local`.
 
 ## Phase 6: Linter and LSP integration (deferred)
 
