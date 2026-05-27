@@ -36,6 +36,35 @@ pub(crate) fn format_unary_expr(
     Ok(format!("{op}{rhs}"))
 }
 
+/// IR builder for unary expressions. Mirrors [`format_unary_expr`]: operator
+/// directly prefixed to the operand.
+pub(crate) fn ir_unary_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let op_idx = elements
+        .iter()
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(tok.kind(), SyntaxKind::PLUS | SyntaxKind::MINUS | SyntaxKind::BANG)
+            )
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "unary operator not found",
+            snippet: node.text().to_string(),
+        })?;
+    let op = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => tok.text().to_string(),
+        NodeOrToken::Node(_) => unreachable!(),
+    };
+    let rhs = ir_expr_segment(&elements[op_idx + 1..], "unary operand", indent, ctx)?;
+    Ok(Ir::concat([Ir::text(op), rhs]))
+}
+
 pub(crate) fn format_assignment_expr(
     node: &SyntaxNode,
     indent: usize,

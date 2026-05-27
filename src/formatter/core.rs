@@ -12,7 +12,7 @@ use super::rules::control_flow::{
 };
 use super::rules::expressions::{
     format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
-    format_unary_expr, ir_assignment_expr,
+    format_unary_expr, ir_assignment_expr, ir_unary_expr,
 };
 use super::rules::functions::{format_call_expr, format_function_expr};
 use super::style::FormatStyle;
@@ -229,6 +229,9 @@ pub(super) fn ir_expr_element(
 fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<Ir, FormatError> {
     if let Some(expr) = AssignmentExpr::cast(node.clone()) {
         return ir_assignment_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = UnaryExpr::cast(node.clone()) {
+        return ir_unary_expr(expr.syntax(), indent, ctx);
     }
     // Not-yet-migrated constructs bridge through the legacy renderer.
     Ok(Ir::verbatim(legacy_format_expr_node(node, indent, ctx)?))
