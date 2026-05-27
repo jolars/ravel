@@ -1,10 +1,12 @@
-use rowan::{NodeOrToken, SyntaxElement};
+use rowan::{NodeOrToken, SyntaxElement, SyntaxToken};
 
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_block_expr_with_prefixed_comments, format_expr_element,
-    format_expr_segment, format_expr_with_optional_comment, is_trivia,
+    format_expr_segment, format_expr_with_optional_comment, ir_block_expr_with_prefixed_comments,
+    ir_expr_element, ir_expr_segment, is_trivia,
 };
+use super::super::ir::Ir;
 use crate::ast::{AstNode, ForExpr, ForExprParts, IfExpr, WhileExpr, WhileExprParts};
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
@@ -408,6 +410,143 @@ pub(crate) fn format_repeat_expr(
         &parts.post_keyword_comments,
     )?;
     Ok(format!("repeat {body}"))
+}
+
+/// IR builder for `for`. Mirrors [`format_for_expr`].
+pub(crate) fn ir_for_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let parts = parse_for_expr_parts(node, indent, ctx)?;
+    let variable = ir_expr_segment(&parts.variable_elements, "for loop variable", indent, ctx)?;
+    let sequence = ir_expr_segment(&parts.sequence_elements, "for loop sequence", indent, ctx)?;
+    let header = Ir::concat([
+        Ir::text("for ("),
+        variable,
+        Ir::text(" in "),
+        sequence,
+        Ir::text(")"),
+    ]);
+    let prefixed = comment_texts(&parts.post_clause_comments);
+    let body = ir_loop_body(parts.body.as_ref(), indent, ctx, &prefixed)?;
+    Ok(ir_with_leading_comments(
+        &parts.leading_comments,
+        header,
+        body,
+    ))
+}
+
+/// IR builder for `while`. Mirrors [`format_while_expr`]: the condition is
+/// wrapped onto its own indented line when it cannot stay inline.
+pub(crate) fn ir_while_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let parts = parse_while_expr_parts(node, indent, ctx)?;
+    let condition = ir_expr_segment(
+        &parts.condition_elements,
+        "while loop condition",
+        indent + 1,
+        ctx,
+    )?;
+    let header = Ir::group(Ir::concat([
+        Ir::text("while ("),
+        Ir::indent(Ir::concat([Ir::soft_line(), condition])),
+        Ir::soft_line(),
+        Ir::text(")"),
+    ]));
+    let prefixed = comment_texts(&parts.post_clause_comments);
+    let body = ir_loop_body(parts.body.as_ref(), indent, ctx, &prefixed)?;
+    Ok(ir_with_leading_comments(
+        &parts.leading_comments,
+        header,
+        body,
+    ))
+}
+
+/// IR builder for `repeat`. Mirrors [`format_repeat_expr`].
+pub(crate) fn ir_repeat_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let parts = parse_repeat_expr_parts(node)?;
+    let body = ir_loop_body(
+        parts.body.as_ref(),
+        indent,
+        ctx,
+        &parts.post_keyword_comments,
+    )?;
+    Ok(Ir::concat([Ir::text("repeat "), body]))
+}
+
+fn comment_texts(tokens: &[SyntaxToken<RLanguage>]) -> Vec<String> {
+    tokens.iter().map(|tok| tok.text().to_string()).collect()
+}
+
+/// Emit any leading comments each on their own line, then `header`, a space, and
+/// the `body`. Mirrors the assembly shared by the loop formatters.
+fn ir_with_leading_comments(leading: &[SyntaxToken<RLanguage>], header: Ir, body: Ir) -> Ir {
+    let mut parts = Vec::new();
+    for comment in leading {
+        parts.push(Ir::text(comment.text().to_string()));
+        parts.push(Ir::hard_line());
+    }
+    parts.push(header);
+    parts.push(Ir::text(" "));
+    parts.push(body);
+    Ir::concat(parts)
+}
+
+/// IR counterpart of the (identical) loop body formatters: a block body, an
+/// auto-braced bare expression, or an empty/comment-only synthesized block.
+fn ir_loop_body(
+    body: Option<&SyntaxElement<RLanguage>>,
+    indent: usize,
+    ctx: FormatContext,
+    prefixed_comments: &[String],
+) -> Result<Ir, FormatError> {
+    match body {
+        Some(NodeOrToken::Node(node)) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+            ir_block_expr_with_prefixed_comments(node, indent, ctx, prefixed_comments)
+        }
+        Some(element) => {
+            let expr = ir_expr_element(element, indent + 1, ctx)?;
+            let mut items: Vec<Ir> = prefixed_comments
+                .iter()
+                .map(|c| Ir::text(c.clone()))
+                .collect();
+            items.push(expr);
+            Ok(synthetic_block(items))
+        }
+        None => {
+            if prefixed_comments.is_empty() {
+                return Ok(Ir::text("{}"));
+            }
+            let items: Vec<Ir> = prefixed_comments
+                .iter()
+                .map(|c| Ir::text(c.clone()))
+                .collect();
+            Ok(synthetic_block(items))
+        }
+    }
+}
+
+/// Wrap `items` (one per line) in a hard-broken, indented `{ }` block.
+fn synthetic_block(items: Vec<Ir>) -> Ir {
+    let body = Ir::concat(
+        items
+            .into_iter()
+            .map(|it| Ir::concat([Ir::hard_line(), it])),
+    );
+    Ir::concat([
+        Ir::text("{"),
+        Ir::indent(body),
+        Ir::hard_line(),
+        Ir::text("}"),
+    ])
 }
 
 pub(crate) fn try_format_for_with_external_body(

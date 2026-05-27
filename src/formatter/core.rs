@@ -5,10 +5,10 @@ use super::ir::Ir;
 use super::printer::Printer;
 use super::render::{format_atom_token, format_block_expr_with_prefixed_comments as render_block};
 use super::rules::control_flow::{
-    format_for_expr, format_if_expr, format_repeat_expr, format_while_expr,
-    should_insert_comment_for_gap, try_format_for_with_external_body,
-    try_format_if_with_external_body, try_format_repeat_with_external_body,
-    try_format_while_with_external_body,
+    format_for_expr, format_if_expr, format_repeat_expr, format_while_expr, ir_for_expr,
+    ir_repeat_expr, ir_while_expr, should_insert_comment_for_gap,
+    try_format_for_with_external_body, try_format_if_with_external_body,
+    try_format_repeat_with_external_body, try_format_while_with_external_body,
 };
 use super::rules::expressions::{
     format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
@@ -281,6 +281,15 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     }
     if let Some(expr) = BlockExpr::cast(node.clone()) {
         return ir_block_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = ForExpr::cast(node.clone()) {
+        return ir_for_expr(expr.syntax(), indent, ctx);
+    }
+    if let Some(expr) = WhileExpr::cast(node.clone()) {
+        return ir_while_expr(expr.syntax(), indent, ctx);
+    }
+    if node.kind() == SyntaxKind::REPEAT_EXPR {
+        return ir_repeat_expr(node, indent, ctx);
     }
     // Not-yet-migrated constructs bridge through the legacy renderer.
     Ok(Ir::verbatim(legacy_format_expr_node(node, indent, ctx)?))
