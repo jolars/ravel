@@ -141,13 +141,57 @@ pub(crate) fn ir_call_expr(
         ]));
     }
 
-    Ok(Ir::concat([callee, build_call_args_ir(&slots)]))
+    let force_named_functions = should_force_multiline_named_functions(&arg_list);
+    Ok(Ir::concat([
+        callee,
+        build_call_args_ir(&slots, force_named_functions),
+    ]))
+}
+
+/// The native port of [`should_force_multiline_for_named_function_args`]: a call
+/// with more than one non-empty argument and at least two named arguments whose
+/// value is a `function` definition always expands one argument per line, even
+/// when it would otherwise fit (`list(a = function() {}, b = function() {})`).
+fn should_force_multiline_named_functions(arg_list: &SyntaxNode) -> bool {
+    let args: Vec<_> = arg_list
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .collect();
+    let non_empty = args.iter().filter(|arg| arg_has_significant(arg)).count();
+    if non_empty <= 1 {
+        return false;
+    }
+    args.iter().filter(|arg| arg_is_named_function(arg)).count() >= 2
+}
+
+fn arg_has_significant(arg: &SyntaxNode) -> bool {
+    arg.children_with_tokens()
+        .any(|el| !super::super::core::is_trivia(el.kind()))
+}
+
+/// A named argument whose value is (or contains) a `function` definition,
+/// matching the legacy `is_named && formatted.contains("function(")` test.
+/// Lambda (`\(...)`) values do not count, since they never render `function(`.
+fn arg_is_named_function(arg: &SyntaxNode) -> bool {
+    let is_named = arg
+        .children_with_tokens()
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ));
+    is_named
+        && arg.descendants().any(|n| {
+            n.kind() == SyntaxKind::FUNCTION_EXPR
+                && n.children_with_tokens().any(|el| {
+                    matches!(el, NodeOrToken::Token(tok)
+                        if tok.kind() == SyntaxKind::FUNCTION_KW && tok.text() == "function")
+                })
+        })
 }
 
 /// Whether the call's arg list must use the legacy renderer: it contains a
-/// comment (comment relocation is unported), a function-definition argument
-/// (function bodies / the trailing-function hug are unported), or a curly-curly
-/// argument (its multi-line layout is legacy-string-specific).
+/// comment (comment relocation is unported), a curly-curly argument (its
+/// multi-line layout is legacy-string-specific), or a function-definition
+/// argument that itself renders via the legacy string path (see
+/// [`function_expr_needs_legacy`]). Natively-rendered function args flow
+/// through `ir_call_expr`'s recursion and the trailing-block hug.
 fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
     arg_list
         .descendants_with_tokens()
@@ -155,16 +199,73 @@ fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
         || arg_list
             .children()
             .filter(|n| n.kind() == SyntaxKind::ARG)
-            .any(|arg| arg_is_function(&arg) || arg_is_curly_curly(&arg))
+            .any(|arg| arg_is_curly_curly(&arg) || arg_is_legacy_function(&arg))
 }
 
-/// A direct argument that is a function definition, or a named argument whose
-/// value is one (`f = function(...) ...`). A function nested deeper (e.g.
-/// `g(function() 1)`) is left to the recursive native renderer of the inner
-/// call.
-fn arg_is_function(arg: &SyntaxNode) -> bool {
+/// The function-definition node of a direct argument, if any: a bare
+/// `function(...)` arg or the value of a named `f = function(...)` arg.
+fn arg_function_node(arg: &SyntaxNode) -> Option<SyntaxNode> {
     arg.children()
-        .any(|n| n.kind() == SyntaxKind::FUNCTION_EXPR)
+        .find(|n| n.kind() == SyntaxKind::FUNCTION_EXPR)
+}
+
+/// A function-definition argument that `ir_function_expr` would render as a
+/// `Verbatim` blob, so the whole call stays on the legacy renderer.
+fn arg_is_legacy_function(arg: &SyntaxNode) -> bool {
+    arg_function_node(arg).is_some_and(|f| function_expr_needs_legacy(&f))
+}
+
+/// Whether a function-definition node falls back to the legacy string renderer
+/// (i.e. `ir_function_expr` returns `Verbatim`): a comment in its head, param
+/// list, or body-outer position; a brace-token default (`a = { ... }`, which the
+/// parser leaves as raw braces); or a bare body that embeds a block. Comments
+/// *inside* a block body render natively, so they do not count here.
+fn function_expr_needs_legacy(fn_node: &SyntaxNode) -> bool {
+    let direct_token_legacy = fn_node.children_with_tokens().any(|el| {
+        matches!(el, NodeOrToken::Token(tok)
+            if matches!(tok.kind(), SyntaxKind::COMMENT | SyntaxKind::LBRACE))
+    });
+    direct_token_legacy || bare_body_embeds_block(fn_node)
+}
+
+/// A function whose body is not itself a block but contains one (e.g.
+/// `function() if (x) { ... }`): its bare body carries a forced break, which
+/// `ir_function_expr` routes to the legacy renderer.
+fn bare_body_embeds_block(fn_node: &SyntaxNode) -> bool {
+    // Param defaults are raw tokens, so the only child node is the body.
+    match fn_node.children().last() {
+        Some(body) if body.kind() != SyntaxKind::BLOCK_EXPR => body
+            .descendants()
+            .any(|d| d.kind() == SyntaxKind::BLOCK_EXPR),
+        _ => false,
+    }
+}
+
+/// A *positional* trailing function-definition argument with a block body
+/// (`function(...) { ... }`), whose arg list can hug the body's opening brace
+/// like a bare trailing block. Detected structurally (not via a forced break),
+/// since a single-statement block flattens to a bare body whose group hides the
+/// break. Named function args (`f = function(...) ...`) are excluded, mirroring
+/// the legacy renderer, which only hugs trailing args that start with
+/// `function(`.
+fn expr_is_block_bodied_function(node: &SyntaxNode) -> bool {
+    node.kind() == SyntaxKind::FUNCTION_EXPR
+        && !value_node_is_named_arg(node)
+        && node
+            .children()
+            .last()
+            .is_some_and(|body| body.kind() == SyntaxKind::BLOCK_EXPR)
+}
+
+/// Whether this argument-value node sits in a named call argument: its parent is
+/// an `ARG` carrying an `=` (`name = <node>`).
+fn value_node_is_named_arg(node: &SyntaxNode) -> bool {
+    node.parent().is_some_and(|arg| {
+        arg.kind() == SyntaxKind::ARG
+            && arg.children_with_tokens().any(
+                |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ),
+            )
+    })
 }
 
 /// A direct argument whose value is a curly-curly `{{ x }}` block.
@@ -232,6 +333,10 @@ fn is_huggable_node(node: &SyntaxNode) -> bool {
         SyntaxKind::CALL_EXPR | SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR => {
             call_or_subset_has_content(node)
         }
+        // A sole function-definition argument hugs the parens with no extra
+        // indent and breaks its own params / braces its own body
+        // (`fn(function(<long params>) { ... })`).
+        SyntaxKind::FUNCTION_EXPR => true,
         SyntaxKind::BINARY_EXPR => node
             .children()
             .last()
@@ -376,21 +481,30 @@ fn build_named_arg_ir(name_ir: Ir, name_empty: bool, value_ir: Option<Ir>) -> Ir
     }
 }
 
-fn build_call_args_ir(slots: &[ArgSlot]) -> Ir {
+fn build_call_args_ir(slots: &[ArgSlot], force_named_functions: bool) -> Ir {
     let last = slots.len() - 1;
     let first_non_empty = slots.iter().position(|s| !s.is_empty_hole());
     let no_non_empty = first_non_empty.is_none();
 
-    let trailing_block = slots[..last].iter().all(|s| !s.has_forced_break())
-        && matches!(&slots[last], ArgSlot::Expr { ir, expr_node: Some(node) }
-            if expr_ends_in_block(node) && ir.contains_forced_break());
+    let trailing_block = !force_named_functions
+        && slots[..last].iter().all(|s| !s.has_forced_break())
+        && match &slots[last] {
+            ArgSlot::Expr {
+                ir,
+                expr_node: Some(node),
+            } => {
+                (expr_ends_in_block(node) && ir.contains_forced_break())
+                    || expr_is_block_bodied_function(node)
+            }
+            _ => false,
+        };
     if trailing_block {
         return build_arg_hug(slots, "(", ")", first_non_empty, no_non_empty);
     }
 
     let leading_hole = slots[0].is_empty_hole();
-    let force = should_force_leading_hole_expand(slots, first_non_empty);
-    let hug_leading_hole = force && leading_hole;
+    let force = force_named_functions || should_force_leading_hole_expand(slots, first_non_empty);
+    let hug_leading_hole = force && leading_hole && !force_named_functions;
     build_arg_group(
         slots,
         "(",

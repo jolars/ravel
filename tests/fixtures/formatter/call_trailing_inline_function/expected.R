@@ -30,13 +30,16 @@ map(
   }
 )
 
-map(x, function(
-  a,
-  a_really_really_long_parameter,
-  and_another_one_here_too_wow_this_is_long
-) {
-  1
-})
+map(
+  x,
+  function(
+    a,
+    a_really_really_long_parameter,
+    and_another_one_here_too_wow_this_is_long
+  ) {
+    1
+  }
+)
 
 map(
   my_long_list_my_long_list_my_long_list_my_long_list,

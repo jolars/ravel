@@ -245,14 +245,25 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       intentional change is that a single-statement function body that is a
       named call argument now flattens to a bare body, matching the flatten rule
       already used elsewhere (`call_named_function_argument` guards it).
-- [ ] **Migrate the remaining legacy fallbacks to native IR.** `ir_call_expr`
-      and `ir_function_expr` still defer to the string renderers
-      (`format_call_expr` / `format_function_expr`) for arg/param lists carrying
-      comments (relocation unported), for curly-curly `{{ }}` args, and for
-      function defs that are call arguments. Porting comment relocation unblocks
-      removing these fallbacks — and lets call's trailing-function hug move onto
-      the `group_hug` primitive (it currently uses a build-time
-      `fits_with_newlines` check over the function's verbatim string).
+- [x] **Function-definition call args + trailing-function hug → native IR.**
+      `ir_call_expr` no longer defers to the legacy renderer for natively
+      renderable function args: a sole function arg hugs the parens
+      (pass-through), and a trailing positional `function(...) { ... }` hugs via
+      the `group_hug` primitive (no more build-time `fits_with_newlines` over a
+      verbatim string). Function args that themselves need the string renderer
+      (comments, brace-token defaults, bare body embedding a block) keep the
+      whole call on legacy via `function_expr_needs_legacy`. The
+      named-function-args force-multiline rule is ported
+      (`should_force_multiline_named_functions`). One intentional layout change
+      (`call_trailing_inline_function` guards it): a multi-arg call whose
+      trailing function's params must break now expands one arg per line instead
+      of hugging `callee(x, function(` — ravel's single-pass printer cannot
+      reproduce the legacy two-phase "format the function, then measure" hug.
+- [ ] **Migrate the remaining legacy call/param fallbacks to native IR.**
+      `ir_call_expr` / `ir_function_expr` still defer to the string renderers for
+      arg/param lists carrying comments (relocation unported) and for curly-curly
+      `{{ }}` args. Porting comment relocation is the last blocker for removing
+      the fallbacks.
 - [ ] Once those fallbacks are gone, retire the now-dead string renderers
       (`format_call_expr`, `format_function_expr`, and their param/arg helpers)
       and the retained `fits_inline` / `fits_with_newlines` width helpers
