@@ -3,8 +3,8 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_expr_element, format_expr_segment, format_expr_with_optional_comment,
-    ir_block_expr_with_prefixed_comments, ir_expr_element, ir_expr_segment, ir_line,
-    snippet_from_elements,
+    ir_block_expr_with_prefixed_comments, ir_expr_element, ir_expr_segment,
+    ir_expr_with_optional_comment, ir_line, snippet_from_elements,
 };
 use super::super::ir::Ir;
 use super::super::trivia::split_lines;
@@ -113,11 +113,22 @@ pub(crate) fn ir_call_expr(
             snippet: node.text().to_string(),
         })?;
 
-    if call_needs_legacy(&arg_list) {
+    if call_has_legacy_function(&arg_list) || call_comment_path_unsupported(&arg_list) {
         return Ok(Ir::verbatim(format_call_expr(node, indent, ctx)?));
     }
 
     let callee = ir_expr_segment(&elements[..lparen_idx], "call callee", indent, ctx)?;
+
+    // Comments are relocated natively (own-line vs trailing) by an always-broken
+    // item-stream layout; the flat/hug optimizations below never apply once a
+    // comment is present.
+    if arg_list_needs_comment_layout(&arg_list) {
+        return Ok(Ir::concat([
+            callee,
+            ir_call_args_with_comments(&arg_list, indent, ctx)?,
+        ]));
+    }
+
     let (slots, comma_count) = collect_call_ir_slots(&arg_list, indent, ctx)?;
 
     // Empty call: no arguments and no holes.
@@ -186,20 +197,151 @@ fn arg_is_named_function(arg: &SyntaxNode) -> bool {
         })
 }
 
-/// Whether the call's arg list must use the legacy renderer: it contains a
-/// comment (comment relocation is unported) or a function-definition argument
-/// that itself renders via the legacy string path (see
-/// [`function_expr_needs_legacy`]). Natively-rendered function args flow through
-/// `ir_call_expr`'s recursion and the trailing-block hug; curly-curly `{{ x }}`
-/// args render natively (see [`ir_curly_curly`]).
-fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
+/// Whether the call has a function-definition argument that itself renders via
+/// the legacy string path (see [`function_expr_needs_legacy`]), forcing the whole
+/// call onto the legacy renderer. Natively-rendered function args flow through
+/// `ir_call_expr`'s recursion and the trailing-block hug.
+fn call_has_legacy_function(arg_list: &SyntaxNode) -> bool {
     arg_list
-        .descendants_with_tokens()
-        .any(|el| el.kind() == SyntaxKind::COMMENT)
-        || arg_list
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::ARG)
-            .any(|arg| arg_is_legacy_function(&arg))
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .any(|arg| arg_is_legacy_function(&arg))
+}
+
+/// The one comment shape the native comment layout does not reproduce: an
+/// argument that `format_arg` routes to the `ASSIGNMENT_EXPR` string helpers
+/// (`format_assignment_expr_arg` / `format_named_arg_with_assignment_node`) *and*
+/// that carries a comment inside the assignment. Such args are not producible
+/// from diagnostic-free input today, but the gate keeps them on the legacy
+/// renderer rather than dropping the comment.
+fn call_comment_path_unsupported(arg_list: &SyntaxNode) -> bool {
+    arg_list
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .any(|arg| {
+            let significant: Vec<_> = arg
+                .children_with_tokens()
+                .filter(|el| !super::super::core::is_trivia(el.kind()))
+                .collect();
+            let assignment_based = match significant.as_slice() {
+                [NodeOrToken::Node(n)] => n.kind() == SyntaxKind::ASSIGNMENT_EXPR,
+                [NodeOrToken::Token(t), NodeOrToken::Node(n)] => {
+                    t.kind() == SyntaxKind::IDENT && n.kind() == SyntaxKind::ASSIGNMENT_EXPR
+                }
+                _ => false,
+            };
+            assignment_based
+                && arg
+                    .descendants_with_tokens()
+                    .any(|el| el.kind() == SyntaxKind::COMMENT)
+        })
+}
+
+/// Whether this arg list owns comments that need relocating onto their own lines
+/// or trailing the previous argument. That is the case for a comment sitting
+/// directly in an `ARG` (a comment-only arg, or a leading/trailing/around-`=`
+/// comment) or for a curly-curly `{{ … }}` argument whose lifted comments this
+/// level prints. Comments buried in a nested call/subset/function/block are
+/// relocated by that construct's own renderer, so they do not count here.
+fn arg_list_needs_comment_layout(arg_list: &SyntaxNode) -> bool {
+    arg_list
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .any(|arg| {
+            arg.children_with_tokens()
+                .any(|el| el.kind() == SyntaxKind::COMMENT)
+                || arg_value_is_commented_curly_curly(&arg)
+        })
+}
+
+/// Whether an argument's value is a curly-curly `{{ … }}` carrying a comment
+/// somewhere inside (so its comments must be lifted out — see
+/// [`ir_curly_curly_with_comments`]). Handles both bare (`{{ x }}`) and named
+/// (`name = {{ x }}`) arguments.
+fn arg_value_is_commented_curly_curly(arg: &SyntaxNode) -> bool {
+    let elements: Vec<_> = arg.children_with_tokens().collect();
+    let value_elements = match elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        Some(eq_idx) => &elements[eq_idx + 1..],
+        None => &elements[..],
+    };
+    let value_significant: Vec<_> = value_elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    let [NodeOrToken::Node(outer)] = value_significant.as_slice() else {
+        return false;
+    };
+    is_curly_curly_symbol_block(outer)
+        && outer
+            .descendants_with_tokens()
+            .any(|el| el.kind() == SyntaxKind::COMMENT)
+}
+
+/// Whether a `BLOCK_EXPR` is a curly-curly `{{ symbol }}` wrapper that
+/// [`ir_curly_curly_with_comments`] will accept: an outer block whose only
+/// significant content (ignoring comments) is an inner block holding exactly one
+/// `IDENT`. A `{{ … }}` with zero or a non-symbol inner expression is *not* a
+/// curly-curly — it renders as ordinary nested blocks (and so must not be routed
+/// to the comment layout, where it would lose the trailing-block hug).
+fn is_curly_curly_symbol_block(outer: &SyntaxNode) -> bool {
+    if outer.kind() != SyntaxKind::BLOCK_EXPR {
+        return false;
+    }
+    let outer_sig: Vec<_> = outer
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if outer_sig.len() < 2 {
+        return false;
+    }
+    let (Some(NodeOrToken::Token(l)), Some(NodeOrToken::Token(r))) =
+        (outer_sig.first(), outer_sig.last())
+    else {
+        return false;
+    };
+    if l.kind() != SyntaxKind::LBRACE || r.kind() != SyntaxKind::RBRACE {
+        return false;
+    }
+    let mut inner = None::<SyntaxNode>;
+    for el in &outer_sig[1..outer_sig.len() - 1] {
+        match el {
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::BLOCK_EXPR => {
+                if inner.is_some() {
+                    return false;
+                }
+                inner = Some(n.clone());
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {}
+            _ => return false,
+        }
+    }
+    let Some(inner) = inner else {
+        return false;
+    };
+    let inner_sig: Vec<_> = inner
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if inner_sig.len() < 3 {
+        return false;
+    }
+    let (Some(NodeOrToken::Token(il)), Some(NodeOrToken::Token(ir))) =
+        (inner_sig.first(), inner_sig.last())
+    else {
+        return false;
+    };
+    if il.kind() != SyntaxKind::LBRACE || ir.kind() != SyntaxKind::RBRACE {
+        return false;
+    }
+    let exprs: Vec<_> = inner_sig[1..inner_sig.len() - 1]
+        .iter()
+        .filter(|el| !matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT))
+        .collect();
+    matches!(exprs.as_slice(), [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::IDENT)
 }
 
 /// The function-definition node of a direct argument, if any: a bare
@@ -215,11 +357,17 @@ fn arg_is_legacy_function(arg: &SyntaxNode) -> bool {
     arg_function_node(arg).is_some_and(|f| function_expr_needs_legacy(&f))
 }
 
-/// Whether a function-definition node falls back to the legacy string renderer
-/// (i.e. `ir_function_expr` returns `Verbatim`): a comment in its head, param
-/// list, or body-outer position; a brace-token default (`a = { ... }`, which the
-/// parser leaves as raw braces); or a bare body that embeds a block. Comments
-/// *inside* a block body render natively, so they do not count here.
+/// Whether a function-definition node *used as a call argument* falls back to the
+/// legacy string renderer, keeping the whole call on legacy. A direct comment or
+/// brace-token default (`a = { ... }`), or a bare body that embeds a block.
+///
+/// Note: `ir_function_expr` now relocates head/param/body comments natively, so a
+/// stand-alone commented function definition no longer needs legacy. But a
+/// *commented* function definition nested as a call argument is still routed here
+/// to legacy: the legacy call renderer's handling of such args differs from the
+/// native trailing-function path, and untangling that belongs with the
+/// function-as-argument migration, not comment relocation. Keeping the `COMMENT`
+/// check preserves byte-identical output for those cases.
 fn function_expr_needs_legacy(fn_node: &SyntaxNode) -> bool {
     let direct_token_legacy = fn_node.children_with_tokens().any(|el| {
         matches!(el, NodeOrToken::Token(tok)
@@ -558,6 +706,516 @@ fn build_call_args_ir(slots: &[ArgSlot], force_named_functions: bool) -> Ir {
         force,
         hug_leading_hole,
     )
+}
+
+// ===================== Native IR call comment relocation =====================
+//
+// When an arg list owns comments, the layout is *always* broken: the flat and
+// hug forms never apply. `ir_call_args_with_comments` walks a flat item stream
+// (`Arg` / `Comma`, the IR port of `collect_call_items`) and decides, per
+// comment, whether it trails the previous argument's last line, leads the next
+// element on its own line, or stands alone — reproducing `format_arg_list_multiline`
+// while emitting real IR for every argument expression.
+
+/// One formatted argument in the comment-aware item stream.
+struct IrCallArg {
+    /// The argument's IR (for a comment-only arg, just the comment text).
+    ir: Ir,
+    /// An empty hole, e.g. the gaps in `f(, a)`.
+    is_empty: bool,
+    /// A comment-only arg (`# note` with no expression).
+    is_comment_only: bool,
+    /// The raw comment text, for a comment-only arg.
+    comment_text: String,
+    /// Whether a source newline precedes this arg (distinguishes a comment that
+    /// trails the previous line from one that leads on its own line).
+    leading_newline: bool,
+    /// Whether the rendered argument ends in `=` (a value-less named arg), which
+    /// changes the comma/comment separator (` ,` / ` , ` rather than `,` / `, `).
+    ends_with_eq: bool,
+}
+
+enum IrCallItem {
+    Arg(IrCallArg),
+    Comma { newline_after: bool },
+}
+
+fn ir_call_args_with_comments(
+    arg_list: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let items = collect_call_comment_items(arg_list, indent, ctx)?;
+    let lines = layout_call_comment_items(&items);
+    if lines.is_empty() {
+        return Ok(Ir::text("()"));
+    }
+    Ok(Ir::concat([
+        Ir::text("("),
+        Ir::indent(Ir::concat([
+            Ir::hard_line(),
+            Ir::join(Ir::hard_line(), lines),
+        ])),
+        Ir::hard_line(),
+        Ir::text(")"),
+    ]))
+}
+
+fn collect_call_comment_items(
+    arg_list: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Vec<IrCallItem>, FormatError> {
+    let elements: Vec<_> = arg_list.children_with_tokens().collect();
+    let mut items = Vec::new();
+    for (idx, element) in elements.iter().enumerate() {
+        match element {
+            NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                let mut arg_info = ir_call_comment_arg(arg, indent, ctx)?;
+                arg_info.leading_newline = has_newline_before_arg(&elements, idx);
+                items.push(IrCallItem::Arg(arg_info));
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
+                items.push(IrCallItem::Comma {
+                    newline_after: comma_followed_by_newline(&elements, idx),
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok(items)
+}
+
+/// Whether a comma at `idx` is followed by a newline before the next argument or
+/// comma. Mirrors the `newline_after` scan in `collect_call_items`.
+fn comma_followed_by_newline(elements: &[SyntaxElement<RLanguage>], idx: usize) -> bool {
+    for next in elements.iter().skip(idx + 1) {
+        match next {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE => return true,
+            NodeOrToken::Token(tok)
+                if tok.kind() == SyntaxKind::WHITESPACE || tok.kind() == SyntaxKind::COMMENT => {}
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG => return false,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => return false,
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// IR port of [`format_arg`] for the comment layout: classifies the arg and
+/// builds its IR (with any leading/internal comments lifted onto their own
+/// lines).
+fn ir_call_comment_arg(
+    arg: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<IrCallArg, FormatError> {
+    let elements: Vec<_> = arg.children_with_tokens().collect();
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if significant.is_empty() {
+        return Ok(IrCallArg {
+            ir: Ir::nil(),
+            is_empty: true,
+            is_comment_only: false,
+            comment_text: String::new(),
+            leading_newline: false,
+            ends_with_eq: false,
+        });
+    }
+    if let [NodeOrToken::Token(tok)] = significant.as_slice()
+        && tok.kind() == SyntaxKind::COMMENT
+    {
+        let text = tok.text().to_string();
+        return Ok(IrCallArg {
+            ir: Ir::text(text.clone()),
+            is_empty: false,
+            is_comment_only: true,
+            comment_text: text,
+            leading_newline: false,
+            ends_with_eq: false,
+        });
+    }
+
+    let (ir, ends_with_eq) = ir_call_arg_value(&elements, &significant, indent, ctx)?;
+    Ok(IrCallArg {
+        ir,
+        is_empty: false,
+        is_comment_only: false,
+        comment_text: String::new(),
+        leading_newline: false,
+        ends_with_eq,
+    })
+}
+
+/// Build the IR for a non-comment-only argument value, plus whether it ends in
+/// `=`. Mirrors the curly-curly / named-arg / positional branches of
+/// [`format_arg`], lifting any leading/around-`=` comments onto their own lines.
+fn ir_call_arg_value(
+    elements: &[SyntaxElement<RLanguage>],
+    significant: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(Ir, bool), FormatError> {
+    if let Some(curly) = ir_curly_curly_with_comments(significant, indent, ctx)? {
+        return Ok((curly, false));
+    }
+
+    if let Some(eq_idx) = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        let lhs_comments: Vec<String> = elements[..eq_idx]
+            .iter()
+            .filter_map(comment_text_of)
+            .collect();
+        let lhs_significant: Vec<_> = elements[..eq_idx]
+            .iter()
+            .filter(|el| {
+                !super::super::core::is_trivia(el.kind()) && el.kind() != SyntaxKind::COMMENT
+            })
+            .cloned()
+            .collect();
+        let name_empty = lhs_significant.is_empty();
+        let name_ir = if name_empty {
+            Ir::nil()
+        } else {
+            ir_expr_segment(&lhs_significant, "named arg name", indent, ctx)?
+        };
+        let (rhs_comments, value_ir) =
+            ir_rhs_with_leading_comments(&elements[eq_idx + 1..], indent, ctx)?;
+        let value_empty = value_ir.is_none();
+        let base = build_named_arg_ir(name_ir, name_empty, value_ir);
+        let mut comments = lhs_comments;
+        comments.extend(rhs_comments);
+        return Ok((prepend_comment_lines(&comments, base), value_empty));
+    }
+
+    let ir = ir_expr_with_optional_comment(elements, "positional arg", indent, ctx)?;
+    Ok((ir, false))
+}
+
+/// IR port of [`format_assignment_rhs_with_leading_comments`]: peel any leading
+/// comments off the value, then build the (optional) value IR with a trailing
+/// comment honored.
+fn ir_rhs_with_leading_comments(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(Vec<String>, Option<Ir>), FormatError> {
+    let mut idx = 0usize;
+    let mut leading = Vec::new();
+    while idx < elements.len() {
+        match &elements[idx] {
+            NodeOrToken::Token(tok) if super::super::core::is_trivia(tok.kind()) => idx += 1,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                leading.push(tok.text().to_string());
+                idx += 1;
+            }
+            _ => break,
+        }
+    }
+    if idx >= elements.len() {
+        return Ok((leading, None));
+    }
+    // A curly-curly `{{ x }}` value is lifted natively, matching the no-comment
+    // named-arg path (`ir_call_argument`); other values render as one expression
+    // with an optional trailing comment.
+    let value_significant: Vec<_> = elements[idx..]
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    let value = if let Some(curly) = ir_curly_curly_with_comments(&value_significant, indent, ctx)?
+    {
+        curly
+    } else {
+        ir_expr_with_optional_comment(&elements[idx..], "assignment rhs", indent, ctx)?
+    };
+    Ok((leading, Some(value)))
+}
+
+fn comment_text_of(el: &SyntaxElement<RLanguage>) -> Option<String> {
+    match el {
+        NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+            Some(tok.text().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Prefix `base` with one own-line comment per entry (`# c\n# d\nbase`).
+fn prepend_comment_lines(comments: &[String], base: Ir) -> Ir {
+    if comments.is_empty() {
+        return base;
+    }
+    let mut parts: Vec<Ir> = Vec::new();
+    for comment in comments {
+        parts.push(Ir::verbatim_forced(comment.clone()));
+        parts.push(Ir::hard_line());
+    }
+    parts.push(base);
+    Ir::concat(parts)
+}
+
+/// IR port of [`format_arg_list_multiline`]: turn the item stream into one IR per
+/// output line, deciding comment placement. Always emits a fully-broken list.
+fn layout_call_comment_items(items: &[IrCallItem]) -> Vec<Ir> {
+    let mut out: Vec<Ir> = Vec::new();
+    let mut i = 0usize;
+    while i < items.len() {
+        match &items[i] {
+            IrCallItem::Arg(arg) if arg.is_empty => {
+                i += 1;
+            }
+            IrCallItem::Arg(arg) if arg.is_comment_only => {
+                out.push(Ir::verbatim_forced(arg.comment_text.clone()));
+                i += 1;
+            }
+            IrCallItem::Arg(arg) => {
+                // A comment-only arg directly after this one (no comma between)
+                // and on the same source line trails the argument's last line.
+                if let Some(IrCallItem::Arg(comment_arg)) = items.get(i + 1)
+                    && comment_arg.is_comment_only
+                    && !comment_arg.leading_newline
+                {
+                    out.push(Ir::concat([
+                        arg.ir.clone(),
+                        Ir::text(" "),
+                        Ir::text(comment_arg.comment_text.clone()),
+                    ]));
+                    i += 2;
+                    continue;
+                }
+
+                // `arg, # comment` — the comment shares the comma's line. Trailing
+                // comment-only args after it align under the comment (` ` ×3).
+                if let (
+                    Some(IrCallItem::Comma {
+                        newline_after: false,
+                    }),
+                    Some(IrCallItem::Arg(comment_arg)),
+                ) = (items.get(i + 1), items.get(i + 2))
+                    && comment_arg.is_comment_only
+                {
+                    let sep = if arg.ends_with_eq { " , " } else { ", " };
+                    out.push(Ir::concat([
+                        arg.ir.clone(),
+                        Ir::text(sep),
+                        Ir::text(comment_arg.comment_text.clone()),
+                    ]));
+                    i += 3;
+                    while let Some(IrCallItem::Arg(extra)) = items.get(i) {
+                        if !extra.is_comment_only {
+                            break;
+                        }
+                        out.push(Ir::text(format!("   {}", extra.comment_text)));
+                        i += 1;
+                    }
+                    continue;
+                }
+
+                if matches!(items.get(i + 1), Some(IrCallItem::Comma { .. })) {
+                    out.push(Ir::concat([
+                        arg.ir.clone(),
+                        Ir::text(if arg.ends_with_eq { " ," } else { "," }),
+                    ]));
+                    i += 2;
+                } else {
+                    out.push(arg.ir.clone());
+                    i += 1;
+                }
+            }
+            IrCallItem::Comma { .. } => {
+                out.push(Ir::text(","));
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// IR port of [`try_format_curly_curly`]. Returns `Some` when `significant` is a
+/// curly-curly `{{ symbol }}` wrapper; comments are lifted out and placed
+/// (leading the `{{`, leading/trailing the symbol, trailing the `}}`, or below
+/// it) exactly as the legacy renderer does. With no comments, defers to the flat
+/// [`ir_curly_curly`] group. Returns `None` for any non-curly-curly shape.
+fn ir_curly_curly_with_comments(
+    significant: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<Ir>, FormatError> {
+    let [NodeOrToken::Node(outer)] = significant else {
+        return Ok(None);
+    };
+    if outer.kind() != SyntaxKind::BLOCK_EXPR {
+        return Ok(None);
+    }
+    let outer_elements: Vec<_> = outer.children_with_tokens().collect();
+    let outer_significant: Vec<_> = outer_elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    let (Some(NodeOrToken::Token(outer_l)), Some(NodeOrToken::Token(outer_r))) =
+        (outer_significant.first(), outer_significant.last())
+    else {
+        return Ok(None);
+    };
+    if outer_l.kind() != SyntaxKind::LBRACE || outer_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+
+    let mut inner_node = None::<SyntaxNode>;
+    let mut outer_leading_comments = Vec::new();
+    for element in outer_significant
+        .iter()
+        .skip(1)
+        .take(outer_significant.len().saturating_sub(2))
+    {
+        match element {
+            NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR => {
+                if inner_node.is_some() {
+                    return Ok(None);
+                }
+                inner_node = Some(node.clone());
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if inner_node.is_some() {
+                    break;
+                }
+                outer_leading_comments.push(tok.text().to_string());
+            }
+            _ => return Ok(None),
+        }
+    }
+    let Some(inner) = inner_node else {
+        return Ok(None);
+    };
+
+    let inner_significant: Vec<_> = inner
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    if inner_significant.len() < 3 {
+        return Ok(None);
+    }
+    let (Some(NodeOrToken::Token(inner_l)), Some(NodeOrToken::Token(inner_r))) =
+        (inner_significant.first(), inner_significant.last())
+    else {
+        return Ok(None);
+    };
+    if inner_l.kind() != SyntaxKind::LBRACE || inner_r.kind() != SyntaxKind::RBRACE {
+        return Ok(None);
+    }
+
+    let inner_payload = &inner_significant[1..inner_significant.len() - 1];
+    let expr_count = inner_payload
+        .iter()
+        .filter(|el| !matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT))
+        .count();
+    if expr_count != 1 {
+        return Ok(None);
+    }
+
+    let mut inner_pre_comments = Vec::new();
+    let mut inner_after_comments = Vec::new();
+    let mut inner_expr = None::<SyntaxElement<RLanguage>>;
+    for element in inner_payload {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if inner_expr.is_some() {
+                    inner_after_comments.push(tok.text().to_string());
+                } else {
+                    inner_pre_comments.push(tok.text().to_string());
+                }
+            }
+            _ => {
+                if inner_expr.is_some() {
+                    return Ok(None);
+                }
+                inner_expr = Some(element.clone());
+            }
+        }
+    }
+    let Some(inner_expr) = inner_expr else {
+        return Ok(None);
+    };
+    if !matches!(&inner_expr, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::IDENT) {
+        return Ok(None);
+    }
+
+    let inner_idx = outer_elements
+        .iter()
+        .position(
+            |el| matches!(el, NodeOrToken::Node(node) if node.kind() == SyntaxKind::BLOCK_EXPR),
+        )
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing inner block for curly-curly",
+            snippet: outer.text().to_string(),
+        })?;
+    let mut inline_trailing = None::<String>;
+    let mut outer_post_comments = Vec::new();
+    let mut saw_newline = false;
+    for element in outer_elements.iter().skip(inner_idx + 1) {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::NEWLINE => saw_newline = true,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::WHITESPACE => {}
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                if !saw_newline && inline_trailing.is_none() {
+                    inline_trailing = Some(tok.text().to_string());
+                } else {
+                    outer_post_comments.push(tok.text().to_string());
+                }
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RBRACE => break,
+            _ => return Ok(None),
+        }
+    }
+
+    // No comments anywhere: defer to the flat/group curly-curly form.
+    if outer_leading_comments.is_empty()
+        && inner_pre_comments.is_empty()
+        && inner_after_comments.is_empty()
+        && outer_post_comments.is_empty()
+        && inline_trailing.is_none()
+    {
+        return ir_curly_curly(significant, indent, ctx);
+    }
+
+    let expr_ir = ir_expr_element(&inner_expr, indent + 1, ctx)?;
+    let mut parts: Vec<Ir> = Vec::new();
+    for comment in &outer_leading_comments {
+        parts.push(Ir::verbatim_forced(comment.clone()));
+        parts.push(Ir::hard_line());
+    }
+    parts.push(Ir::text("{{"));
+    let mut body: Vec<Ir> = Vec::new();
+    for comment in &inner_pre_comments {
+        body.push(Ir::hard_line());
+        body.push(Ir::verbatim_forced(comment.clone()));
+    }
+    body.push(Ir::hard_line());
+    body.push(expr_ir);
+    for comment in &inner_after_comments {
+        body.push(Ir::hard_line());
+        body.push(Ir::verbatim_forced(comment.clone()));
+    }
+    parts.push(Ir::indent(Ir::concat(body)));
+    parts.push(Ir::hard_line());
+    parts.push(Ir::text("}}"));
+    if let Some(comment) = inline_trailing {
+        parts.push(Ir::text(" "));
+        parts.push(Ir::text(comment));
+    }
+    for comment in &outer_post_comments {
+        parts.push(Ir::hard_line());
+        parts.push(Ir::verbatim_forced(comment.clone()));
+    }
+    Ok(Some(Ir::concat(parts)))
 }
 
 fn try_hug_single_argument_call(
@@ -1616,13 +2274,42 @@ pub(crate) fn ir_function_expr(
     let param_elements = &elements[lparen_idx + 1..rparen_idx];
     let body_elements = &elements[rparen_idx + 1..];
 
-    if function_needs_legacy(&elements, fn_idx, lparen_idx, param_elements, body_elements) {
+    if function_has_brace_default(param_elements) {
         return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
     }
 
-    let params_ir = ir_function_params(param_elements, indent, ctx)?;
+    // Comments are relocated natively: a comment before `(` is hoisted above the
+    // whole definition; comments inside `()` keep the param list broken; a comment
+    // between `)` and the body is lifted into (or braces) the body. With any such
+    // comment the definition stays broken — the bare/flat inline form never applies.
+    let leading_fn_comments: Vec<String> = elements[fn_idx + 1..lparen_idx]
+        .iter()
+        .filter_map(comment_text_of)
+        .collect();
+    let param_has_comment = param_elements
+        .iter()
+        .any(|el| el.kind() == SyntaxKind::COMMENT);
 
-    let body_core: Vec<_> = body_elements
+    let params_ir = if param_has_comment {
+        ir_function_params_with_comments(param_elements)
+    } else {
+        ir_function_params(param_elements, indent, ctx)?
+    };
+
+    // Peel leading comments (between `)` and the body) off the body core.
+    let mut body_leading_comments = Vec::new();
+    let mut body_start = 0usize;
+    while body_start < body_elements.len() {
+        match &body_elements[body_start] {
+            NodeOrToken::Token(tok) if super::super::core::is_trivia(tok.kind()) => body_start += 1,
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                body_leading_comments.push(tok.text().to_string());
+                body_start += 1;
+            }
+            _ => break,
+        }
+    }
+    let body_core: Vec<_> = body_elements[body_start..]
         .iter()
         .filter(|el| !super::super::core::is_trivia(el.kind()))
         .cloned()
@@ -1637,26 +2324,105 @@ pub(crate) fn ir_function_expr(
     let head_ir = Ir::text(head);
     let body_node = single_node(&body_core);
 
-    if let Some(block) = body_node
+    let core = if let Some(block) = body_node
         .as_ref()
         .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
     {
-        let block_ir = ir_block_expr_with_prefixed_comments(block, indent, ctx, &[])?;
-        if let Some(stmt_ir) = try_flatten_function_block(block, indent, ctx)? {
-            return Ok(function_body_choice(head_ir, params_ir, stmt_ir, block_ir));
+        let block_ir =
+            ir_block_expr_with_prefixed_comments(block, indent, ctx, &body_leading_comments)?;
+        // A flattenable block (`function(p) { stmt }` → `function(p) stmt`) only
+        // applies with no comments forcing the layout open.
+        if !param_has_comment
+            && body_leading_comments.is_empty()
+            && let Some(stmt_ir) = try_flatten_function_block(block, indent, ctx)?
+        {
+            function_body_choice(head_ir, params_ir, stmt_ir, block_ir)
+        } else {
+            function_braced_hug(head_ir, params_ir, block_ir)
         }
-        return Ok(function_braced_hug(head_ir, params_ir, block_ir));
-    }
+    } else {
+        // Bare (non-block) body. A body whose IR carries a forced break (e.g. an
+        // `if` with braced arms) is kept bare and multi-line by the legacy
+        // renderer when each line fits; defer to it (it relocates the comments too)
+        // rather than force-bracing the body.
+        let body_ir = ir_expr_segment(&body_core, "function body", indent, ctx)?;
+        if body_ir.contains_forced_break() {
+            return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
+        }
+        if !param_has_comment && body_leading_comments.is_empty() {
+            function_body_choice(
+                head_ir,
+                params_ir,
+                body_ir.clone(),
+                brace_wrap_body(body_ir),
+            )
+        } else {
+            function_braced_hug(
+                head_ir,
+                params_ir,
+                brace_wrap_body_with_comments(body_ir, &body_leading_comments),
+            )
+        }
+    };
 
-    // Bare (non-block) body. A body whose IR carries a forced break (e.g. an
-    // `if` with braced arms) is kept bare and multi-line by the legacy renderer
-    // when each line fits; defer to it rather than force-bracing the body.
-    let body_ir = ir_expr_segment(&body_core, "function body", indent, ctx)?;
-    if body_ir.contains_forced_break() {
-        return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
+    Ok(prepend_comment_lines(&leading_fn_comments, core))
+}
+
+/// Wrap a bare body in a block, prefixing `comments` on their own lines before
+/// the body (`{`, `# c`, …, body, `}`). With no comments this is
+/// [`brace_wrap_body`].
+fn brace_wrap_body_with_comments(body: Ir, comments: &[String]) -> Ir {
+    let mut inner: Vec<Ir> = Vec::new();
+    for comment in comments {
+        inner.push(Ir::hard_line());
+        inner.push(Ir::verbatim_forced(comment.clone()));
     }
-    let braced = brace_wrap_body(body_ir.clone());
-    Ok(function_body_choice(head_ir, params_ir, body_ir, braced))
+    inner.push(Ir::hard_line());
+    inner.push(body);
+    Ir::concat([
+        Ir::text("{"),
+        Ir::indent(Ir::concat(inner)),
+        Ir::hard_line(),
+        Ir::text("}"),
+    ])
+}
+
+/// IR port of [`format_function_parameters`]'s comment branch: with a comment in
+/// the param list, emit each comma-delimited segment's raw (trimmed) lines one
+/// per line, a comma after the last line of every non-final segment. The list is
+/// always broken.
+fn ir_function_params_with_comments(param_elements: &[SyntaxElement<RLanguage>]) -> Ir {
+    let segments = split_top_level_function_params(param_elements);
+    if segments.is_empty() {
+        return Ir::text("()");
+    }
+    let mut lines: Vec<Ir> = Vec::new();
+    for (idx, segment) in segments.iter().enumerate() {
+        let raw = snippet_from_elements(segment);
+        let seg_lines: Vec<&str> = raw
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect();
+        let last = seg_lines.len();
+        for (line_idx, line) in seg_lines.iter().enumerate() {
+            let add_comma = idx + 1 < segments.len() && line_idx + 1 == last;
+            lines.push(Ir::text(if add_comma {
+                format!("{line},")
+            } else {
+                (*line).to_string()
+            }));
+        }
+    }
+    Ir::concat([
+        Ir::text("("),
+        Ir::indent(Ir::concat([
+            Ir::hard_line(),
+            Ir::join(Ir::hard_line(), lines),
+        ])),
+        Ir::hard_line(),
+        Ir::text(")"),
+    ])
 }
 
 /// The conditional group choosing the bare inline body (flat) vs the braced
@@ -1688,31 +2454,13 @@ fn brace_wrap_body(body: Ir) -> Ir {
     ])
 }
 
-/// Whether a function definition must use the legacy renderer (see the section
-/// header): any comment around the params/body, or a brace-token default.
-fn function_needs_legacy(
-    elements: &[SyntaxElement<RLanguage>],
-    fn_idx: usize,
-    lparen_idx: usize,
-    param_elements: &[SyntaxElement<RLanguage>],
-    body_elements: &[SyntaxElement<RLanguage>],
-) -> bool {
-    let leading_fn_comment = elements[fn_idx + 1..lparen_idx]
+/// Whether a parameter list carries a brace-token default (`a = { … }`), which
+/// the parser leaves as raw braces. These still route the whole definition to the
+/// legacy renderer; comments around the params/body are handled natively.
+fn function_has_brace_default(param_elements: &[SyntaxElement<RLanguage>]) -> bool {
+    param_elements
         .iter()
-        .any(|el| el.kind() == SyntaxKind::COMMENT);
-    let param_comment = param_elements
-        .iter()
-        .any(|el| el.kind() == SyntaxKind::COMMENT);
-    // `body_elements` are the direct children after `)`, so a comment token here
-    // is a body-leading or trailing comment (in-block comments live inside the
-    // body node and are handled natively).
-    let body_outer_comment = body_elements
-        .iter()
-        .any(|el| el.kind() == SyntaxKind::COMMENT);
-    let brace_default = param_elements
-        .iter()
-        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LBRACE));
-    leading_fn_comment || param_comment || body_outer_comment || brace_default
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LBRACE))
 }
 
 /// Build the `( ... )` param list as a bare concat (no enclosing group): empty
