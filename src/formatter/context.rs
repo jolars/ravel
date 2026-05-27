@@ -10,6 +10,10 @@ impl FormatContext {
         Self { style }
     }
 
+    pub(crate) fn style(self) -> FormatStyle {
+        self.style
+    }
+
     pub(crate) fn indent_text(self, indent: usize) -> String {
         " ".repeat(self.style.indent_width * indent)
     }

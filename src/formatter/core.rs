@@ -1,6 +1,8 @@
 use rowan::{NodeOrToken, SyntaxElement};
 
 use super::context::FormatContext;
+use super::ir::Ir;
+use super::printer::Printer;
 use super::render::{format_atom_token, format_block_expr_with_prefixed_comments as render_block};
 use super::rules::control_flow::{
     format_for_expr, format_if_expr, format_repeat_expr, format_while_expr,
@@ -100,6 +102,14 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
 }
 
 fn format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatError> {
+    // Bridge: render via the legacy path, then route through the IR printer as a
+    // single verbatim node. Constructs migrate off this bridge one step at a time.
+    let legacy = legacy_format_root(root, ctx)?;
+    let ir = Ir::verbatim(legacy);
+    Ok(Printer::new(ctx.style()).print(&ir))
+}
+
+fn legacy_format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatError> {
     let lines = split_lines(root.children_with_tokens().collect(), "root")?;
     if lines.is_empty() {
         return Ok(String::new());

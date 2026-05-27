@@ -1,6 +1,8 @@
 pub mod check;
 pub(crate) mod context;
 pub mod core;
+pub(crate) mod ir;
+pub(crate) mod printer;
 pub(crate) mod render;
 pub(crate) mod rules;
 pub mod style;
