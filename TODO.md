@@ -3,7 +3,8 @@
 ## Goal
 
 Build a robust Rust-based foundation for R tooling with this implementation
-order.
+order. **Strategy: bring the parser + formatter foundation to (near-)completion
+first; defer the LSP and linter until that foundation is solid.**
 
 - [x] Parser/CST foundation (initial bootstrap completed; continue expanding)
 - [x] Formatter (first consumer)
@@ -54,13 +55,15 @@ order.
 - [x] Parse control and structural constructs (`if`, `for`, `while`, `function`,
       blocks).
 - [x] Define statement boundary rules, especially newline-sensitive cases.
-- [ ] Handle ambiguous contexts such as `=` in argument lists vs assignment.
+- [x] Handle ambiguous contexts such as `=` in argument lists vs assignment.
+      (done: `is_named_arg` in `src/parser/expr.rs`)
 - [x] Add recovery rules that keep CST shape stable after syntax errors.
 
 ## Phase 2.5: Parsing completeness and hardening
 
-- [ ] Expand operator/assignment coverage (`=`, `<<-`, `->`, `->>`) with
-      explicit precedence and associativity decisions.
+- [x] Expand operator/assignment coverage (`=`, `<<-`, `->`, `->>`) with
+      explicit precedence and associativity decisions. (lexer + Pratt binding
+      powers cover all assignment operators)
 - [ ] Formalize newline-sensitive statement boundary behavior for edge cases
       (continuations, dangling constructs, nested forms).
 - [ ] Add targeted parsing fixtures for ambiguous contexts (argument defaults,
@@ -109,7 +112,9 @@ easy -> medium -> hard.
 - [x] `ok/repeat_statement.R` (hard)
 - [x] `ok/dots.R` (hard)
 - [x] `ok/dot_dot_i.R` (hard)
-- [x] `ok/value/complex_value.R` (hard)
+- [x] `ok/value/complex_value.R` (hard) — ⚠️ fixture ported but lexing is
+      **incorrect**: the imaginary suffix `i` is not lexed, so `1i` becomes
+      `INT "1"` + `IDENT "i"`. See "Known issues / follow-ups" below.
 
 ### AIR `error` cases (7)
 
@@ -144,14 +149,16 @@ easy -> medium -> hard.
 
 ## Phase 3.2: Typed AST wrappers over CST (rowan)
 
-- [ ] Introduce typed AstWrappers using rowan's built-in AST support (`AstNode`,
+Done: implemented in `src/ast/nodes.rs` with tests in `tests/ast_wrappers.rs`.
+
+- [x] Introduce typed AstWrappers using rowan's built-in AST support (`AstNode`,
       `ast::support`).
-- [ ] Add wrapper coverage for current core nodes (`AssignmentExpr`,
+- [x] Add wrapper coverage for current core nodes (`AssignmentExpr`,
       `BinaryExpr`, `IfExpr`, `ForExpr`, `WhileExpr`, `FunctionExpr`,
       `BlockExpr`).
-- [ ] Keep wrappers zero-cost over lossless CST (no semantic evaluation, no data
+- [x] Keep wrappers zero-cost over lossless CST (no semantic evaluation, no data
       duplication).
-- [ ] Add tests validating wrapper casting/traversal against snapshot fixtures.
+- [x] Add tests validating wrapper casting/traversal against snapshot fixtures.
 
 ## Phase 3.5: CLI bootstrap
 
@@ -185,6 +192,25 @@ easy -> medium -> hard.
 - [ ] Add migration/regression tests to ensure v2 changes remain predictable and
       safe.
 
+## Phase 5.3: Formatter IR (layout) architecture
+
+Done: replaced the ad-hoc "render to String then measure" model with a
+Wadler/Prettier-style document IR (`src/formatter/ir.rs`) and a single best-fit
+layout engine (`src/formatter/printer.rs`). Construct formatters build an `Ir`
+tree; the printer makes all line-break decisions and the whole document is one
+IR tree printed once. Migrated behavior-preserving (byte-identical across the
+fixture/idempotence/round-trip suite).
+
+- [x] `Ir` enum (text/concat/line/soft-line/hard-line/empty-line/indent/group/
+      if_break/verbatim) + `Printer` layout engine with width-aware `fits`.
+- [x] Migrate scalar/operator/control-flow-loop/block/paren/root constructs to
+      native IR (atoms, assignment, unary, binary incl. sticky ops + pipes,
+      paren, block, for/while/repeat, statement sequence + external bodies).
+- [x] Bridge if/else and subset/call/function into the IR via `Verbatim` (kept
+      their specialized renderers): if/else gains nothing from IR width logic,
+      and the arg-list constructs have an idiosyncratic string-based wrapping
+      algorithm that cannot be ported byte-identically. See follow-ups.
+
 ## Phase 5.5: Project configuration (TOML, Ruff-inspired)
 
 - [ ] Define `ravel.toml` configuration schema and defaults (human-friendly,
@@ -195,6 +221,32 @@ easy -> medium -> hard.
       expandable).
 - [ ] Validate and report configuration errors with clear file/field context.
 - [ ] Add tests for config parsing, discovery, precedence, and invalid files.
+
+## Known issues / follow-ups
+
+Foundation-hardening items to address before (or alongside) wrapping up the
+parser + formatter foundation, and ahead of the LSP/linter phases.
+
+### Parser
+
+- [ ] **Complex literals are mis-lexed.** The imaginary suffix `i` is not
+      recognized, so `1i`, `2.5i`, `1e6i`, `0x123Fi` lex as a numeric token
+      followed by `IDENT "i"` instead of a single imaginary literal. Fix the
+      lexer (`src/parser/lexer.rs`) to consume a trailing `i` on numeric
+      literals, add a dedicated token/`SyntaxKind` if warranted, and refresh the
+      `air_ok_value_complex_value` snapshot.
+
+### Formatter
+
+- [ ] **Native IR arg-wrapping for subset/call/function.** These are currently
+      bridged into the IR via `Verbatim` (Phase 5.3). Re-implement their
+      wrapping natively on the IR (group/soft-line based). This is a *deliberate
+      behavior change* (nicer wrapping), not behavior-preserving — review
+      snapshot diffs as intentional. The IR already reserves the needed
+      primitives (`group_expanded`, `if_break`, `verbatim_forced`, `join`).
+- [ ] Once arg-lists are native IR, retire the retained `fits_inline` /
+      `fits_with_newlines` width helpers (`src/formatter/context.rs`) and the
+      string-based loop-body / external-body helpers in `rules/`.
 
 ## Phase 6: Linter and LSP integration (deferred)
 
