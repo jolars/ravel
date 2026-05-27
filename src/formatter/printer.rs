@@ -121,7 +121,7 @@ impl Printer {
             match node {
                 Ir::Nil => {}
                 Ir::Text(s) => w.write_text(s),
-                Ir::Verbatim(s) => w.write_verbatim(s),
+                Ir::Verbatim { text, .. } => w.write_verbatim(text),
                 Ir::Concat(items) => {
                     for item in items.iter().rev() {
                         stack.push((indent, mode, item));
@@ -173,7 +173,17 @@ impl Printer {
                     }
                     remaining -= w;
                 }
-                Ir::Verbatim(_) | Ir::HardLine | Ir::EmptyLine => return false,
+                Ir::HardLine | Ir::EmptyLine => return false,
+                Ir::Verbatim { text, force_break } => {
+                    if *force_break {
+                        return false;
+                    }
+                    let w = text.chars().count();
+                    if w > remaining {
+                        return false;
+                    }
+                    remaining -= w;
+                }
                 Ir::Concat(items) => {
                     for item in items.iter().rev() {
                         stack.push(item);

@@ -140,6 +140,112 @@ pub(crate) fn ir_assignment_expr(
     Ok(Ir::concat([lhs, Ir::text(format!(" {op} ")), rhs]))
 }
 
+/// IR builder for binary expressions. Mirrors [`format_binary_expr`]:
+/// - `::` / `:::` are sticky and never wrap;
+/// - `|>` and `%>%` always break after the operator;
+/// - `^`, `:`, `$` render with no surrounding spaces;
+/// - everything else gets a space-separated group whose broken form leads the
+///   continuation line with the operator, indented one level.
+pub(crate) fn ir_binary_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let op_idx = elements
+        .iter()
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(
+                        tok.kind(),
+                        SyntaxKind::PLUS
+                            | SyntaxKind::MINUS
+                            | SyntaxKind::STAR
+                            | SyntaxKind::SLASH
+                            | SyntaxKind::CARET
+                            | SyntaxKind::PIPE
+                            | SyntaxKind::COLON
+                            | SyntaxKind::OR
+                            | SyntaxKind::OR2
+                            | SyntaxKind::AND
+                            | SyntaxKind::AND2
+                            | SyntaxKind::EQUAL2
+                            | SyntaxKind::NOT_EQUAL
+                            | SyntaxKind::LESS_THAN
+                            | SyntaxKind::LESS_THAN_OR_EQUAL
+                            | SyntaxKind::GREATER_THAN
+                            | SyntaxKind::GREATER_THAN_OR_EQUAL
+                            | SyntaxKind::TILDE
+                            | SyntaxKind::USER_OP
+                            | SyntaxKind::COLON2
+                            | SyntaxKind::COLON3
+                            | SyntaxKind::DOLLAR
+                    )
+            )
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "binary operator not found",
+            snippet: node.text().to_string(),
+        })?;
+
+    let (op_kind, op_text) = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => (tok.kind(), tok.text().to_string()),
+        NodeOrToken::Node(_) => unreachable!(),
+    };
+    let lhs = ir_binary_side(&elements[..op_idx], "binary lhs", indent, ctx)?;
+    let rhs = ir_binary_side(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
+
+    // `::` / `:::` are sticky and never wrap.
+    if op_kind == SyntaxKind::COLON2 || op_kind == SyntaxKind::COLON3 {
+        return Ok(Ir::concat([lhs, Ir::text(op_text), rhs]));
+    }
+
+    // Pipes always break after the operator, indenting the continuation. The
+    // right operand stays at the base indent (matching the legacy renderer).
+    if op_kind == SyntaxKind::PIPE || (op_kind == SyntaxKind::USER_OP && op_text == "%>%") {
+        return Ok(Ir::concat([
+            lhs,
+            Ir::text(format!(" {op_text}")),
+            Ir::indent(Ir::hard_line()),
+            rhs,
+        ]));
+    }
+
+    // `^`, `:`, `$` render with no surrounding spaces.
+    let sticky = matches!(
+        op_kind,
+        SyntaxKind::CARET | SyntaxKind::COLON | SyntaxKind::DOLLAR
+    );
+    let (flat_op, broken_op) = if sticky {
+        (op_text.clone(), op_text.clone())
+    } else {
+        (format!(" {op_text} "), format!("{op_text} "))
+    };
+    Ok(Ir::group(Ir::concat([
+        lhs,
+        Ir::if_break(
+            Ir::text(flat_op),
+            Ir::indent(Ir::concat([Ir::hard_line(), Ir::text(broken_op)])),
+        ),
+        rhs,
+    ])))
+}
+
+fn ir_binary_side(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    // Curly-curly is migrated later; bridge it through the legacy renderer.
+    if let Some(curly_curly) = try_format_curly_curly(elements, indent, ctx)? {
+        return Ok(Ir::verbatim(curly_curly));
+    }
+    ir_expr_segment(elements, context, indent, ctx)
+}
+
 pub(crate) fn format_binary_expr(
     node: &SyntaxNode,
     indent: usize,

@@ -38,10 +38,11 @@ pub(crate) enum Ir {
     Group { inner: Rc<Ir>, expand: bool },
     /// Emit `flat` when the enclosing group is flat, `broken` when it is broken.
     IfBreak { flat: Rc<Ir>, broken: Rc<Ir> },
-    /// Pre-rendered text (comments, or not-yet-migrated constructs) whose
-    /// internal newlines are re-indented to the current column but otherwise
-    /// passed through untouched. Forces enclosing groups to break.
-    Verbatim(Rc<str>),
+    /// Pre-rendered text (comments, or not-yet-migrated constructs) spliced
+    /// through untouched. When `force_break` is set the enclosing group cannot
+    /// stay flat (used for comments and for multi-line bridged renderings);
+    /// otherwise it behaves as opaque inline text of its own width.
+    Verbatim { text: Rc<str>, force_break: bool },
     /// Nothing.
     Nil,
 }
@@ -100,8 +101,21 @@ impl Ir {
         }
     }
 
+    /// A bridged/inline verbatim chunk. It forces a break only if it spans
+    /// multiple lines (i.e. its own layout cannot be collapsed).
     pub(crate) fn verbatim(s: impl Into<Rc<str>>) -> Ir {
-        Ir::Verbatim(s.into())
+        let text: Rc<str> = s.into();
+        let force_break = text.contains('\n');
+        Ir::Verbatim { text, force_break }
+    }
+
+    /// A verbatim chunk that always forces the enclosing group to break,
+    /// regardless of whether it spans multiple lines (e.g. a comment).
+    pub(crate) fn verbatim_forced(s: impl Into<Rc<str>>) -> Ir {
+        Ir::Verbatim {
+            text: s.into(),
+            force_break: true,
+        }
     }
 
     pub(crate) fn line() -> Ir {
