@@ -12,7 +12,7 @@ use super::rules::control_flow::{
 use super::rules::expressions::{
     ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_subset_expr, ir_unary_expr,
 };
-use super::rules::functions::{format_call_expr, format_function_expr};
+use super::rules::functions::{format_function_expr, ir_call_expr};
 use super::style::FormatStyle;
 use super::trivia::{is_trivia as is_trivia_kind, split_lines};
 use crate::ast::{
@@ -293,10 +293,10 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     if let Some(expr) = IfExpr::cast(node.clone()) {
         return ir_if_expr(expr.syntax(), indent, ctx);
     }
-    // Subset arg lists are rendered natively on the IR. Call and function arg
-    // lists still compose into the IR verbatim via their string renderers
-    // (their wrapping is migrated in later steps); nested subsets inside those
-    // still reach `format_subset_expr` through the string dispatcher.
+    // Subset and call arg lists are rendered natively on the IR. Calls that
+    // contain comments or function-definition args fall back to the legacy
+    // string renderer inside `ir_call_expr`. Function definitions still compose
+    // into the IR verbatim via their string renderer (migrated separately).
     if matches!(
         node.kind(),
         SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
@@ -304,7 +304,7 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
         return ir_subset_expr(node, indent, ctx);
     }
     if let Some(expr) = CallExpr::cast(node.clone()) {
-        return Ok(Ir::verbatim(format_call_expr(expr.syntax(), indent, ctx)?));
+        return ir_call_expr(expr.syntax(), indent, ctx);
     }
     if let Some(expr) = FunctionExpr::cast(node.clone()) {
         return Ok(Ir::verbatim(format_function_expr(

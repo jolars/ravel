@@ -3,7 +3,11 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_expr_element, format_expr_segment, format_expr_with_optional_comment,
-    snippet_from_elements,
+    ir_expr_segment, snippet_from_elements,
+};
+use super::super::ir::Ir;
+use super::expressions::{
+    ArgSlot, build_arg_group, build_arg_hug, expr_ends_in_block, should_force_leading_hole_expand,
 };
 use crate::parser::parse;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
@@ -73,6 +77,327 @@ pub(crate) fn format_call_expr(
         "{callee}(\n{multiline_args}\n{})",
         ctx.indent_text(indent)
     ))
+}
+
+// ============================== Native IR call ==============================
+//
+// `ir_call_expr` renders `callee(args)` natively on the IR, reusing the shared
+// arg-list machinery (holes, separators, trailing-block hug) from `expressions`.
+// Calls whose args contain comments or function definitions fall back to the
+// legacy string renderer: comment relocation and function-body autobracing /
+// the trailing-function hug are migrated separately.
+
+pub(crate) fn ir_call_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let lparen_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '(' in call expression",
+            snippet: node.text().to_string(),
+        })?;
+    let arg_list = elements
+        .iter()
+        .find_map(|el| match el {
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::ARG_LIST => Some(n.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing arg list in call expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    if call_needs_legacy(&arg_list) {
+        return Ok(Ir::verbatim(format_call_expr(node, indent, ctx)?));
+    }
+
+    let callee = ir_expr_segment(&elements[..lparen_idx], "call callee", indent, ctx)?;
+    let (slots, comma_count) = collect_call_ir_slots(&arg_list, indent, ctx)?;
+
+    // Empty call: no arguments and no holes.
+    if comma_count == 0 && slots.iter().all(ArgSlot::is_empty_hole) {
+        return Ok(Ir::concat([callee, Ir::text("()")]));
+    }
+
+    // Single-argument hug: a lone positional argument that owns a breakable
+    // trailing arg list (a call/subset, possibly behind `::`/`$`) hugs the
+    // parens with no extra indent, so nested wrapping falls out of the inner
+    // construct's own group (`c(list(\n  ...\n))`, `abort(glue::glue(\n  ...\n))`).
+    if comma_count == 0
+        && let [ArgSlot::Expr { ir, .. }] = slots.as_slice()
+        && single_arg_is_huggable(&arg_list)
+    {
+        return Ok(Ir::concat([
+            callee,
+            Ir::text("("),
+            ir.clone(),
+            Ir::text(")"),
+        ]));
+    }
+
+    Ok(Ir::concat([callee, build_call_args_ir(&slots)]))
+}
+
+/// Whether the call's arg list must use the legacy renderer: it contains a
+/// comment (comment relocation is unported), a function-definition argument
+/// (function bodies / the trailing-function hug are unported), or a curly-curly
+/// argument (its multi-line layout is legacy-string-specific).
+fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
+    arg_list
+        .descendants_with_tokens()
+        .any(|el| el.kind() == SyntaxKind::COMMENT)
+        || arg_list
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ARG)
+            .any(|arg| arg_is_function(&arg) || arg_is_curly_curly(&arg))
+}
+
+/// A direct argument that is a function definition, or a named argument whose
+/// value is one (`f = function(...) ...`). A function nested deeper (e.g.
+/// `g(function() 1)`) is left to the recursive native renderer of the inner
+/// call.
+fn arg_is_function(arg: &SyntaxNode) -> bool {
+    arg.children()
+        .any(|n| n.kind() == SyntaxKind::FUNCTION_EXPR)
+}
+
+/// A direct argument whose value is a curly-curly `{{ x }}` block.
+fn arg_is_curly_curly(arg: &SyntaxNode) -> bool {
+    arg.children().any(|n| is_curly_curly_block(&n))
+}
+
+/// A `{{ ... }}` block: a `BLOCK_EXPR` whose only significant content is a
+/// single inner `BLOCK_EXPR` (plus braces / trivia / comments), matching
+/// [`try_format_curly_curly`]'s detection.
+fn is_curly_curly_block(node: &SyntaxNode) -> bool {
+    if node.kind() != SyntaxKind::BLOCK_EXPR {
+        return false;
+    }
+    let mut inner_blocks = 0;
+    for el in node.children_with_tokens() {
+        match el {
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::LBRACE
+                        | SyntaxKind::RBRACE
+                        | SyntaxKind::WHITESPACE
+                        | SyntaxKind::NEWLINE
+                        | SyntaxKind::COMMENT
+                ) => {}
+            NodeOrToken::Node(n) if n.kind() == SyntaxKind::BLOCK_EXPR => inner_blocks += 1,
+            _ => return false,
+        }
+    }
+    inner_blocks == 1
+}
+
+/// Whether a call's sole argument is a lone positional expression that owns a
+/// non-empty trailing arg list, so the call can hug it with no extra indent.
+fn single_arg_is_huggable(arg_list: &SyntaxNode) -> bool {
+    let args: Vec<_> = arg_list
+        .children()
+        .filter(|n| n.kind() == SyntaxKind::ARG)
+        .collect();
+    let [arg] = args.as_slice() else {
+        return false;
+    };
+    // Named arguments (`name = value`) never hug.
+    if arg
+        .children_with_tokens()
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        return false;
+    }
+    let significant: Vec<_> = arg
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    let [NodeOrToken::Node(n)] = significant.as_slice() else {
+        return false;
+    };
+    is_huggable_node(n)
+}
+
+/// A call/subset with a non-empty arg list, or a `::`/`$`-style binary whose
+/// right side is one — i.e. it ends in a bracketed list that can break.
+fn is_huggable_node(node: &SyntaxNode) -> bool {
+    match node.kind() {
+        SyntaxKind::CALL_EXPR | SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR => {
+            call_or_subset_has_content(node)
+        }
+        SyntaxKind::BINARY_EXPR => node
+            .children()
+            .last()
+            .is_some_and(|rhs| is_huggable_node(&rhs)),
+        _ => false,
+    }
+}
+
+fn call_or_subset_has_content(node: &SyntaxNode) -> bool {
+    node.children()
+        .find(|c| c.kind() == SyntaxKind::ARG_LIST)
+        .is_some_and(|arg_list| {
+            arg_list.children_with_tokens().any(|el| match el {
+                NodeOrToken::Token(tok) => tok.kind() == SyntaxKind::COMMA,
+                NodeOrToken::Node(arg) => {
+                    arg.kind() == SyntaxKind::ARG
+                        && arg
+                            .children_with_tokens()
+                            .any(|e| !super::super::core::is_trivia(e.kind()))
+                }
+            })
+        })
+}
+
+fn collect_call_ir_slots(
+    arg_list: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(Vec<ArgSlot>, usize), FormatError> {
+    let mut slots: Vec<ArgSlot> = Vec::new();
+    let mut comma_count = 0usize;
+    let mut current: Option<ArgSlot> = None;
+    for element in arg_list.children_with_tokens() {
+        match element {
+            NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
+                let arg_elements: Vec<_> = arg.children_with_tokens().collect();
+                let significant: Vec<_> = arg_elements
+                    .iter()
+                    .filter(|el| !super::super::core::is_trivia(el.kind()))
+                    .cloned()
+                    .collect();
+                if significant.is_empty() {
+                    continue;
+                }
+                current = Some(ir_call_argument(&arg_elements, &significant, indent, ctx)?);
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
+                slots.push(current.take().unwrap_or(ArgSlot::Empty));
+                comma_count += 1;
+            }
+            _ => {}
+        }
+    }
+    slots.push(current.take().unwrap_or(ArgSlot::Empty));
+    Ok((slots, comma_count))
+}
+
+fn ir_call_argument(
+    elements: &[SyntaxElement<RLanguage>],
+    significant: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<ArgSlot, FormatError> {
+    // Named argument `name = value`: in calls these are raw tokens (not an
+    // `ASSIGNMENT_EXPR` node as in subsets), so split on `=`. `expr_node` points
+    // at the value so a `name = { ... }` arg is still seen as a trailing block.
+    if let Some(eq_idx) = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        let (name_ir, name_empty) =
+            ir_arg_side(&elements[..eq_idx], "named arg name", indent, ctx)?;
+        let value_elements = &elements[eq_idx + 1..];
+        let value_significant: Vec<_> = value_elements
+            .iter()
+            .filter(|el| !super::super::core::is_trivia(el.kind()))
+            .cloned()
+            .collect();
+        let value_node = single_node(&value_significant);
+        let value_ir = if value_significant.is_empty() {
+            None
+        } else if let Some(curly) = try_format_curly_curly(&value_significant, indent, ctx)? {
+            Some(Ir::verbatim(curly))
+        } else {
+            Some(ir_expr_segment(
+                value_elements,
+                "named arg value",
+                indent,
+                ctx,
+            )?)
+        };
+        let ir = build_named_arg_ir(name_ir, name_empty, value_ir);
+        return Ok(ArgSlot::Expr {
+            ir,
+            expr_node: value_node,
+        });
+    }
+
+    let expr_node = single_node(significant);
+    // Curly-curly `{{ x }}` is bridged through the legacy renderer.
+    if let Some(curly) = try_format_curly_curly(significant, indent, ctx)? {
+        return Ok(ArgSlot::Expr {
+            ir: Ir::verbatim(curly),
+            expr_node,
+        });
+    }
+    let ir = ir_expr_segment(elements, "call argument", indent, ctx)?;
+    Ok(ArgSlot::Expr { ir, expr_node })
+}
+
+fn single_node(significant: &[SyntaxElement<RLanguage>]) -> Option<SyntaxNode> {
+    match significant {
+        [NodeOrToken::Node(n)] => Some(n.clone()),
+        _ => None,
+    }
+}
+
+/// Format one side of a named argument; reports whether it was empty.
+fn ir_arg_side(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<(Ir, bool), FormatError> {
+    let has_significant = elements
+        .iter()
+        .any(|el| !super::super::core::is_trivia(el.kind()));
+    if !has_significant {
+        return Ok((Ir::nil(), true));
+    }
+    Ok((ir_expr_segment(elements, context, indent, ctx)?, false))
+}
+
+/// `name = value`, with the legacy spacing for the value-less variants
+/// (`name =`, `= value`, `=`).
+fn build_named_arg_ir(name_ir: Ir, name_empty: bool, value_ir: Option<Ir>) -> Ir {
+    match (name_empty, value_ir) {
+        (false, Some(value)) => Ir::concat([name_ir, Ir::text(" = "), value]),
+        (false, None) => Ir::concat([name_ir, Ir::text(" =")]),
+        (true, Some(value)) => Ir::concat([Ir::text("= "), value]),
+        (true, None) => Ir::text("="),
+    }
+}
+
+fn build_call_args_ir(slots: &[ArgSlot]) -> Ir {
+    let last = slots.len() - 1;
+    let first_non_empty = slots.iter().position(|s| !s.is_empty_hole());
+    let no_non_empty = first_non_empty.is_none();
+
+    let trailing_block = slots[..last].iter().all(|s| !s.has_forced_break())
+        && matches!(&slots[last], ArgSlot::Expr { ir, expr_node: Some(node) }
+            if expr_ends_in_block(node) && ir.contains_forced_break());
+    if trailing_block {
+        return build_arg_hug(slots, "(", ")", first_non_empty, no_non_empty);
+    }
+
+    let leading_hole = slots[0].is_empty_hole();
+    let force = should_force_leading_hole_expand(slots, first_non_empty);
+    let hug_leading_hole = force && leading_hole;
+    build_arg_group(
+        slots,
+        "(",
+        ")",
+        first_non_empty,
+        no_non_empty,
+        force,
+        hug_leading_hole,
+    )
 }
 
 fn try_hug_single_argument_call(

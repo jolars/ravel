@@ -370,9 +370,9 @@ fn bracket_close_text(kind: SyntaxKind) -> &'static str {
 // the leading-hole hug mirror the tidyverse layout the legacy string renderer
 // produced.
 
-/// One comma-delimited position in a subset arg list.
-enum SubsetSlot {
-    /// An empty hole, e.g. the gaps in `x[, 2]` / `x[a, ]`.
+/// One comma-delimited position in an arg list (subset `[ ]` or call `( )`).
+pub(crate) enum ArgSlot {
+    /// An empty hole, e.g. the gaps in `x[, 2]` / `f(, a)`.
     Empty,
     /// A comment-only slot (no expression), e.g. `x[\n  # note\n]`.
     Comment(String),
@@ -385,32 +385,32 @@ enum SubsetSlot {
     },
 }
 
-impl SubsetSlot {
-    fn is_empty_hole(&self) -> bool {
-        matches!(self, SubsetSlot::Empty)
+impl ArgSlot {
+    pub(crate) fn is_empty_hole(&self) -> bool {
+        matches!(self, ArgSlot::Empty)
     }
 
     /// Whether the slot will unconditionally force its arg list to break (a
     /// comment, or an expression containing a block / other hard break).
-    fn has_forced_break(&self) -> bool {
+    pub(crate) fn has_forced_break(&self) -> bool {
         match self {
-            SubsetSlot::Empty => false,
-            SubsetSlot::Comment(_) => true,
-            SubsetSlot::Expr { ir, .. } => ir.contains_forced_break(),
+            ArgSlot::Empty => false,
+            ArgSlot::Comment(_) => true,
+            ArgSlot::Expr { ir, .. } => ir.contains_forced_break(),
         }
     }
 
-    fn content(&self) -> Ir {
+    pub(crate) fn content(&self) -> Ir {
         match self {
-            SubsetSlot::Empty => Ir::nil(),
-            SubsetSlot::Comment(text) => Ir::verbatim_forced(text.clone()),
-            SubsetSlot::Expr { ir, .. } => ir.clone(),
+            ArgSlot::Empty => Ir::nil(),
+            ArgSlot::Comment(text) => Ir::verbatim_forced(text.clone()),
+            ArgSlot::Expr { ir, .. } => ir.clone(),
         }
     }
 }
 
-struct SubsetSlots {
-    slots: Vec<SubsetSlot>,
+struct ArgSlots {
+    slots: Vec<ArgSlot>,
     has_comment_only: bool,
     has_comment_prefixed: bool,
 }
@@ -463,8 +463,8 @@ fn collect_subset_ir_slots(
     arg_list: &SyntaxNode,
     indent: usize,
     ctx: FormatContext,
-) -> Result<SubsetSlots, FormatError> {
-    let mut slots: Vec<SubsetSlot> = Vec::new();
+) -> Result<ArgSlots, FormatError> {
+    let mut slots: Vec<ArgSlot> = Vec::new();
     let mut comments: Vec<String> = Vec::new();
     let mut expr: Option<(Ir, Option<SyntaxNode>)> = None;
     let mut has_comment_only = false;
@@ -477,7 +477,7 @@ fn collect_subset_ir_slots(
         comments: &mut Vec<String>,
         expr: &mut Option<(Ir, Option<SyntaxNode>)>,
         has_comment_prefixed: &mut bool,
-    ) -> SubsetSlot {
+    ) -> ArgSlot {
         let lead = std::mem::take(comments);
         match expr.take() {
             Some((ir, node)) => {
@@ -495,13 +495,13 @@ fn collect_subset_ir_slots(
                     parts.push(ir);
                     Ir::concat(parts)
                 };
-                SubsetSlot::Expr {
+                ArgSlot::Expr {
                     ir,
                     expr_node: node,
                 }
             }
-            None if lead.is_empty() => SubsetSlot::Empty,
-            None => SubsetSlot::Comment(lead.join("\n")),
+            None if lead.is_empty() => ArgSlot::Empty,
+            None => ArgSlot::Comment(lead.join("\n")),
         }
     }
 
@@ -556,7 +556,7 @@ fn collect_subset_ir_slots(
         &mut has_comment_prefixed,
     ));
 
-    Ok(SubsetSlots {
+    Ok(ArgSlots {
         slots,
         has_comment_only,
         has_comment_prefixed,
@@ -614,7 +614,7 @@ fn ir_subset_argument(
     Ok((Ir::concat(parts), expr_node, true))
 }
 
-fn build_subset_args_ir(data: &SubsetSlots, open: &str, close: &str) -> Ir {
+fn build_subset_args_ir(data: &ArgSlots, open: &str, close: &str) -> Ir {
     let slots = &data.slots;
     let last = slots.len() - 1;
     let first_non_empty = slots.iter().position(|s| !s.is_empty_hole());
@@ -625,21 +625,21 @@ fn build_subset_args_ir(data: &SubsetSlots, open: &str, close: &str) -> Ir {
     let trailing_block = !data.has_comment_only
         && !data.has_comment_prefixed
         && slots[..last].iter().all(|s| !s.has_forced_break())
-        && matches!(&slots[last], SubsetSlot::Expr { ir, expr_node: Some(node), .. }
+        && matches!(&slots[last], ArgSlot::Expr { ir, expr_node: Some(node), .. }
             if expr_ends_in_block(node) && ir.contains_forced_break());
 
     if trailing_block {
-        return build_subset_hug(slots, open, close, first_non_empty, no_non_empty);
+        return build_arg_hug(slots, open, close, first_non_empty, no_non_empty);
     }
 
     let leading_hole = slots[0].is_empty_hole();
     let force = data.has_comment_only
         || data.has_comment_prefixed
-        || should_force_subset_ir(slots, first_non_empty);
+        || should_force_leading_hole_expand(slots, first_non_empty);
     let hug_leading_hole =
         force && leading_hole && !data.has_comment_only && !data.has_comment_prefixed;
 
-    build_subset_group(
+    build_arg_group(
         slots,
         open,
         close,
@@ -652,7 +652,7 @@ fn build_subset_args_ir(data: &SubsetSlots, open: &str, close: &str) -> Ir {
 
 /// Whether a subset arg's expression ends in a block (`{ … }`), so its arg list
 /// can hug the opening brace: a bare block or a named arg `name = { … }`.
-fn expr_ends_in_block(node: &SyntaxNode) -> bool {
+pub(crate) fn expr_ends_in_block(node: &SyntaxNode) -> bool {
     match node.kind() {
         SyntaxKind::BLOCK_EXPR => true,
         SyntaxKind::ASSIGNMENT_EXPR => node
@@ -666,7 +666,10 @@ fn expr_ends_in_block(node: &SyntaxNode) -> bool {
 /// Mirrors the legacy `should_force_subset_multiline`: a leading hole followed
 /// by a multi-line first argument and at least one more non-empty arg forces the
 /// whole list open (so the block is not the trailing element and cannot hug).
-fn should_force_subset_ir(slots: &[SubsetSlot], first_non_empty: Option<usize>) -> bool {
+pub(crate) fn should_force_leading_hole_expand(
+    slots: &[ArgSlot],
+    first_non_empty: Option<usize>,
+) -> bool {
     let Some(first) = first_non_empty else {
         return false;
     };
@@ -678,8 +681,8 @@ fn should_force_subset_ir(slots: &[SubsetSlot], first_non_empty: Option<usize>) 
 /// The flat (inline) separator for the gap after slot `idx`. Adjacent holes
 /// before the first real argument collapse to a bare `,`; everything else gets
 /// `, `. Mirrors `format_subset_args_inline_from_parts`.
-fn flat_subset_sep(
-    slots: &[SubsetSlot],
+pub(crate) fn flat_arg_sep(
+    slots: &[ArgSlot],
     idx: usize,
     first_non_empty: Option<usize>,
     no_non_empty: bool,
@@ -692,8 +695,8 @@ fn flat_subset_sep(
     if compact { "," } else { ", " }
 }
 
-fn build_subset_group(
-    slots: &[SubsetSlot],
+pub(crate) fn build_arg_group(
+    slots: &[ArgSlot],
     open: &str,
     close: &str,
     first_non_empty: Option<usize>,
@@ -707,16 +710,15 @@ fn build_subset_group(
     let mut body: Vec<Ir> = Vec::new();
     for idx in start..n {
         let is_last = idx + 1 == n;
-        // A trailing empty slot whose predecessor is also empty is dropped
-        // (matching the legacy wrapped renderer): `fn[a, , b, , ]` keeps the
-        // comma but not a final blank line.
-        if is_last && idx > 0 && slots[idx - 1].is_empty_hole() && slots[idx].is_empty_hole() {
+        // A trailing empty slot is dropped: the preceding arg keeps its comma
+        // but there is no final blank line (`fn[a, , b, , ]`, `fn(x, {}, )`).
+        if is_last && idx > 0 && slots[idx].is_empty_hole() {
             continue;
         }
         body.push(Ir::soft_line());
         body.push(slots[idx].content());
         if !is_last {
-            let sep = flat_subset_sep(slots, idx, first_non_empty, no_non_empty);
+            let sep = flat_arg_sep(slots, idx, first_non_empty, no_non_empty);
             body.push(Ir::if_break(Ir::text(sep), Ir::text(",")));
         }
     }
@@ -739,8 +741,8 @@ fn build_subset_group(
     }
 }
 
-fn build_subset_hug(
-    slots: &[SubsetSlot],
+pub(crate) fn build_arg_hug(
+    slots: &[ArgSlot],
     open: &str,
     close: &str,
     first_non_empty: Option<usize>,
@@ -754,7 +756,7 @@ fn build_subset_hug(
     for idx in 0..last {
         leading.push(slots[idx].content());
         leading.push(Ir::if_break(
-            Ir::text(flat_subset_sep(slots, idx, first_non_empty, no_non_empty)),
+            Ir::text(flat_arg_sep(slots, idx, first_non_empty, no_non_empty)),
             Ir::text(","),
         ));
         if idx + 1 < last {
