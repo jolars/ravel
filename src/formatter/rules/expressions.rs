@@ -345,11 +345,81 @@ pub(crate) fn format_paren_expr(
     Ok(out)
 }
 
-pub(crate) fn format_subset_expr(
+fn bracket_open_text(kind: SyntaxKind) -> &'static str {
+    match kind {
+        SyntaxKind::LBRACK => "[",
+        SyntaxKind::LBRACK2 => "[[",
+        _ => "",
+    }
+}
+
+fn bracket_close_text(kind: SyntaxKind) -> &'static str {
+    match kind {
+        SyntaxKind::RBRACK => "]",
+        SyntaxKind::RBRACK2 => "]]",
+        _ => "",
+    }
+}
+
+// ============================ Native IR subset =============================
+//
+// `ir_subset_expr` renders `target[args]` / `target[[args]]` directly onto the
+// document IR. The arg list is one `Group`: flat when it fits, otherwise broken
+// one-per-line with the closing bracket on its own line. A trailing block hugs
+// the bracket via `group_hug` (e.g. `dt[, {`…`}]`). Holes, comment slots, and
+// the leading-hole hug mirror the tidyverse layout the legacy string renderer
+// produced.
+
+/// One comma-delimited position in a subset arg list.
+enum SubsetSlot {
+    /// An empty hole, e.g. the gaps in `x[, 2]` / `x[a, ]`.
+    Empty,
+    /// A comment-only slot (no expression), e.g. `x[\n  # note\n]`.
+    Comment(String),
+    /// A formatted argument expression.
+    Expr {
+        ir: Ir,
+        /// The argument's significant expression node, when it is a node (used
+        /// to detect a trailing block to hug); `None` for a bare token.
+        expr_node: Option<SyntaxNode>,
+    },
+}
+
+impl SubsetSlot {
+    fn is_empty_hole(&self) -> bool {
+        matches!(self, SubsetSlot::Empty)
+    }
+
+    /// Whether the slot will unconditionally force its arg list to break (a
+    /// comment, or an expression containing a block / other hard break).
+    fn has_forced_break(&self) -> bool {
+        match self {
+            SubsetSlot::Empty => false,
+            SubsetSlot::Comment(_) => true,
+            SubsetSlot::Expr { ir, .. } => ir.contains_forced_break(),
+        }
+    }
+
+    fn content(&self) -> Ir {
+        match self {
+            SubsetSlot::Empty => Ir::nil(),
+            SubsetSlot::Comment(text) => Ir::verbatim_forced(text.clone()),
+            SubsetSlot::Expr { ir, .. } => ir.clone(),
+        }
+    }
+}
+
+struct SubsetSlots {
+    slots: Vec<SubsetSlot>,
+    has_comment_only: bool,
+    has_comment_prefixed: bool,
+}
+
+pub(crate) fn ir_subset_expr(
     node: &SyntaxNode,
     indent: usize,
     ctx: FormatContext,
-) -> Result<String, FormatError> {
+) -> Result<Ir, FormatError> {
     let elements: Vec<_> = node.children_with_tokens().collect();
     let (open_kind, close_kind) = match node.kind() {
         SyntaxKind::SUBSET_EXPR => (SyntaxKind::LBRACK, SyntaxKind::RBRACK),
@@ -368,7 +438,7 @@ pub(crate) fn format_subset_expr(
             context: "missing opening bracket in subset expression",
             snippet: node.text().to_string(),
         })?;
-    let target = format_expr_segment(&elements[..open_idx], "subset target", indent, ctx)?;
+    let target = ir_expr_segment(&elements[..open_idx], "subset target", indent, ctx)?;
     let arg_list = elements
         .iter()
         .find_map(|el| match el {
@@ -380,165 +450,144 @@ pub(crate) fn format_subset_expr(
             snippet: node.text().to_string(),
         })?;
 
-    let args = format_subset_args(&arg_list, indent, ctx, &target, open_kind, close_kind)?;
-    let open = match open_kind {
-        SyntaxKind::LBRACK => "[",
-        SyntaxKind::LBRACK2 => "[[",
-        _ => unreachable!(),
-    };
-    let close = match close_kind {
-        SyntaxKind::RBRACK => "]",
-        SyntaxKind::RBRACK2 => "]]",
-        _ => unreachable!(),
-    };
-    Ok(format!("{target}{open}{args}{close}"))
+    let data = collect_subset_ir_slots(&arg_list, indent, ctx)?;
+    let open = bracket_open_text(open_kind);
+    let close = bracket_close_text(close_kind);
+    Ok(Ir::concat([
+        target,
+        build_subset_args_ir(&data, open, close),
+    ]))
 }
 
-fn format_subset_args(
+fn collect_subset_ir_slots(
     arg_list: &SyntaxNode,
     indent: usize,
     ctx: FormatContext,
-    target: &str,
-    open_kind: SyntaxKind,
-    close_kind: SyntaxKind,
-) -> Result<String, FormatError> {
-    let parts = collect_subset_arg_parts(arg_list, indent, ctx)?;
-    if parts.slots.is_empty() {
-        return Ok(String::new());
+) -> Result<SubsetSlots, FormatError> {
+    let mut slots: Vec<SubsetSlot> = Vec::new();
+    let mut comments: Vec<String> = Vec::new();
+    let mut expr: Option<(Ir, Option<SyntaxNode>)> = None;
+    let mut has_comment_only = false;
+    let mut has_comment_prefixed = false;
+
+    // Several `ARG` nodes can share one comma-delimited slot (e.g. a comment
+    // `ARG` directly followed by an expression `ARG`); fold them together,
+    // emitting one slot per comma.
+    fn finalize(
+        comments: &mut Vec<String>,
+        expr: &mut Option<(Ir, Option<SyntaxNode>)>,
+        has_comment_prefixed: &mut bool,
+    ) -> SubsetSlot {
+        let lead = std::mem::take(comments);
+        match expr.take() {
+            Some((ir, node)) => {
+                if !lead.is_empty() {
+                    *has_comment_prefixed = true;
+                }
+                let ir = if lead.is_empty() {
+                    ir
+                } else {
+                    let mut parts: Vec<Ir> = Vec::new();
+                    for comment in &lead {
+                        parts.push(Ir::verbatim_forced(comment.clone()));
+                        parts.push(Ir::hard_line());
+                    }
+                    parts.push(ir);
+                    Ir::concat(parts)
+                };
+                SubsetSlot::Expr {
+                    ir,
+                    expr_node: node,
+                }
+            }
+            None if lead.is_empty() => SubsetSlot::Empty,
+            None => SubsetSlot::Comment(lead.join("\n")),
+        }
     }
 
-    let inline_args = format_subset_args_inline_from_parts(&parts, true);
-    let inline_expr = format!(
-        "{target}{}{}{}",
-        bracket_open_text(open_kind),
-        inline_args,
-        bracket_close_text(close_kind)
-    );
-    let has_multiline_arg = parts.slots.iter().flatten().any(|arg| arg.contains('\n'));
-    let force_multiline = parts.has_comment_only_slot
-        || parts.has_comment_prefixed_expr_slot
-        || should_force_subset_multiline(&parts)
-        || !ctx.fits_with_newlines(indent, &inline_expr);
-    if !force_multiline {
-        return Ok(inline_args);
-    }
-    if parts.has_comment_only_slot {
-        return format_subset_args_multiline_wrapped(&parts, indent, ctx);
-    }
-    format_subset_args_multiline(&parts, indent, ctx, has_multiline_arg)
-}
-
-struct SubsetArgParts {
-    slots: Vec<Option<String>>,
-    has_comment_only_slot: bool,
-    has_comment_prefixed_expr_slot: bool,
-}
-
-fn collect_subset_arg_parts(
-    arg_list: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<SubsetArgParts, FormatError> {
-    let mut slots: Vec<Option<String>> = vec![None];
-    let mut slot_idx = 0usize;
-    let mut has_comment_only_slot = false;
-    let mut has_comment_prefixed_expr_slot = false;
     for element in arg_list.children_with_tokens() {
         match element {
             NodeOrToken::Node(arg) if arg.kind() == SyntaxKind::ARG => {
                 let arg_elements: Vec<_> = arg.children_with_tokens().collect();
                 if arg_elements.is_empty() {
-                    slots[slot_idx] = Some(String::new());
-                } else {
-                    let has_comment = arg_elements.iter().any(
-                        |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT),
-                    );
-                    let has_non_comment = arg_elements.iter().any(|el| match el {
-                        NodeOrToken::Node(_) => true,
-                        NodeOrToken::Token(tok) => !matches!(
-                            tok.kind(),
-                            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::COMMENT
-                        ),
-                    });
-                    if has_comment && !has_non_comment {
-                        let comment = arg_elements
-                            .iter()
-                            .find_map(|el| match el {
-                                NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
-                                    Some(tok.text().to_string())
-                                }
-                                _ => None,
-                            })
-                            .unwrap_or_default();
-                        match slots[slot_idx].take() {
-                            Some(existing) if !existing.is_empty() => {
-                                slots[slot_idx] = Some(format!("{existing}\n{comment}"));
-                            }
-                            _ => {
-                                slots[slot_idx] = Some(comment);
-                            }
+                    continue;
+                }
+                let has_comment = arg_elements.iter().any(
+                    |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT),
+                );
+                let has_non_comment = arg_elements.iter().any(|el| match el {
+                    NodeOrToken::Node(_) => true,
+                    NodeOrToken::Token(tok) => !matches!(
+                        tok.kind(),
+                        SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::COMMENT
+                    ),
+                });
+                if has_comment && !has_non_comment {
+                    if let Some(text) = arg_elements.iter().find_map(|el| match el {
+                        NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                            Some(tok.text().to_string())
                         }
-                        has_comment_only_slot = true;
-                    } else {
-                        let (formatted, has_comment_prefix) =
-                            format_subset_argument(&arg_elements, indent, ctx)?;
-                        match slots[slot_idx].take() {
-                            Some(existing) if !existing.is_empty() && !formatted.is_empty() => {
-                                slots[slot_idx] = Some(format!("{existing}\n{formatted}"));
-                            }
-                            Some(existing) if !existing.is_empty() => {
-                                slots[slot_idx] = Some(existing);
-                            }
-                            _ => {
-                                slots[slot_idx] = Some(formatted);
-                            }
-                        }
-                        has_comment_prefixed_expr_slot |= has_comment_prefix;
+                        _ => None,
+                    }) {
+                        comments.push(text);
                     }
+                    has_comment_only = true;
+                } else {
+                    let (ir, node, prefixed) = ir_subset_argument(&arg_elements, indent, ctx)?;
+                    if prefixed {
+                        has_comment_prefixed = true;
+                    }
+                    expr = Some((ir, node));
                 }
             }
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA => {
-                slot_idx += 1;
-                if slots.len() <= slot_idx {
-                    slots.push(None);
-                }
+                slots.push(finalize(
+                    &mut comments,
+                    &mut expr,
+                    &mut has_comment_prefixed,
+                ));
             }
             _ => {}
         }
     }
-    Ok(SubsetArgParts {
+    slots.push(finalize(
+        &mut comments,
+        &mut expr,
+        &mut has_comment_prefixed,
+    ));
+
+    Ok(SubsetSlots {
         slots,
-        has_comment_only_slot,
-        has_comment_prefixed_expr_slot,
+        has_comment_only,
+        has_comment_prefixed,
     })
 }
 
-fn format_subset_argument(
+/// IR counterpart of [`format_subset_argument`]: the argument expression, the
+/// significant node (if any), and whether a leading comment prefixes it.
+fn ir_subset_argument(
     elements: &[SyntaxElement<RLanguage>],
     indent: usize,
     ctx: FormatContext,
-) -> Result<(String, bool), FormatError> {
-    let mut first_non_comment_idx = None;
-    for (idx, el) in elements.iter().enumerate() {
-        if matches!(el, NodeOrToken::Token(tok) if matches!(tok.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
-        {
-            continue;
-        }
-        if matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT) {
-            continue;
-        }
-        first_non_comment_idx = Some(idx);
-        break;
-    }
-
-    let Some(expr_start) = first_non_comment_idx else {
+) -> Result<(Ir, Option<SyntaxNode>, bool), FormatError> {
+    let expr_start = elements.iter().position(|el| {
+        !matches!(el, NodeOrToken::Token(tok) if matches!(
+            tok.kind(),
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::COMMENT
+        ))
+    });
+    let Some(expr_start) = expr_start else {
         return Ok((
-            format_expr_segment(elements, "subset argument", indent, ctx)?,
+            ir_expr_segment(elements, "subset argument", indent, ctx)?,
+            None,
             false,
         ));
     };
-
-    let leading_comments = elements[..expr_start]
+    let expr_node = match &elements[expr_start] {
+        NodeOrToken::Node(n) => Some(n.clone()),
+        NodeOrToken::Token(_) => None,
+    };
+    let leading_comments: Vec<String> = elements[..expr_start]
         .iter()
         .filter_map(|el| match el {
             NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
@@ -546,214 +595,185 @@ fn format_subset_argument(
             }
             _ => None,
         })
-        .collect::<Vec<_>>();
-
+        .collect();
     if leading_comments.is_empty() {
         return Ok((
-            format_expr_segment(elements, "subset argument", indent, ctx)?,
+            ir_expr_segment(elements, "subset argument", indent, ctx)?,
+            expr_node,
             false,
         ));
     }
-
-    let expr =
-        format_expr_with_optional_comment(&elements[expr_start..], "subset argument", indent, ctx)?;
-    Ok((format!("{}\n{expr}", leading_comments.join("\n")), true))
-}
-
-fn format_subset_args_inline_from_parts(
-    parts: &SubsetArgParts,
-    compact_before_first: bool,
-) -> String {
-    let first_non_empty = first_non_empty_slot(parts);
-    let no_non_empty = first_non_empty.is_none();
-    let mut out = String::new();
-    for idx in 0..parts.slots.len() {
-        if let Some(arg) = &parts.slots[idx] {
-            out.push_str(arg);
-        }
-        if idx + 1 < parts.slots.len() {
-            let left_empty = parts.slots[idx].as_deref().is_none_or(str::is_empty);
-            let right_empty = parts.slots[idx + 1].as_deref().is_none_or(str::is_empty);
-            if left_empty
-                && right_empty
-                && (no_non_empty
-                    || first_non_empty.is_some_and(|first| idx + 1 < first && compact_before_first))
-            {
-                out.push(',');
-            } else {
-                out.push_str(", ");
-            }
-        }
+    let expr_ir =
+        ir_expr_with_optional_comment(&elements[expr_start..], "subset argument", indent, ctx)?;
+    let mut parts: Vec<Ir> = Vec::new();
+    for comment in &leading_comments {
+        parts.push(Ir::verbatim_forced(comment.clone()));
+        parts.push(Ir::hard_line());
     }
-    out
+    parts.push(expr_ir);
+    Ok((Ir::concat(parts), expr_node, true))
 }
 
-fn should_force_subset_multiline(parts: &SubsetArgParts) -> bool {
-    let Some(first_non_empty) = first_non_empty_slot(parts) else {
+fn build_subset_args_ir(data: &SubsetSlots, open: &str, close: &str) -> Ir {
+    let slots = &data.slots;
+    let last = slots.len() - 1;
+    let first_non_empty = slots.iter().position(|s| !s.is_empty_hole());
+    let no_non_empty = first_non_empty.is_none();
+
+    // Trailing-block hug: the last slot ends in a non-empty block, leading slots
+    // are single-line, and there are no comments.
+    let trailing_block = !data.has_comment_only
+        && !data.has_comment_prefixed
+        && slots[..last].iter().all(|s| !s.has_forced_break())
+        && matches!(&slots[last], SubsetSlot::Expr { ir, expr_node: Some(node), .. }
+            if expr_ends_in_block(node) && ir.contains_forced_break());
+
+    if trailing_block {
+        return build_subset_hug(slots, open, close, first_non_empty, no_non_empty);
+    }
+
+    let leading_hole = slots[0].is_empty_hole();
+    let force = data.has_comment_only
+        || data.has_comment_prefixed
+        || should_force_subset_ir(slots, first_non_empty);
+    let hug_leading_hole =
+        force && leading_hole && !data.has_comment_only && !data.has_comment_prefixed;
+
+    build_subset_group(
+        slots,
+        open,
+        close,
+        first_non_empty,
+        no_non_empty,
+        force,
+        hug_leading_hole,
+    )
+}
+
+/// Whether a subset arg's expression ends in a block (`{ … }`), so its arg list
+/// can hug the opening brace: a bare block or a named arg `name = { … }`.
+fn expr_ends_in_block(node: &SyntaxNode) -> bool {
+    match node.kind() {
+        SyntaxKind::BLOCK_EXPR => true,
+        SyntaxKind::ASSIGNMENT_EXPR => node
+            .children()
+            .last()
+            .is_some_and(|child| child.kind() == SyntaxKind::BLOCK_EXPR),
+        _ => false,
+    }
+}
+
+/// Mirrors the legacy `should_force_subset_multiline`: a leading hole followed
+/// by a multi-line first argument and at least one more non-empty arg forces the
+/// whole list open (so the block is not the trailing element and cannot hug).
+fn should_force_subset_ir(slots: &[SubsetSlot], first_non_empty: Option<usize>) -> bool {
+    let Some(first) = first_non_empty else {
         return false;
     };
-    let inline = format_subset_args_inline_from_parts(parts, true);
-    let has_multiline = inline.contains('\n');
-    if !has_multiline {
-        return false;
-    }
-    let leading_hole = parts
-        .slots
-        .first()
-        .is_some_and(|slot| slot.as_deref().is_none_or(str::is_empty));
-    let non_empty_count = parts
-        .slots
-        .iter()
-        .filter(|slot| slot.as_deref().is_some_and(|arg| !arg.is_empty()))
-        .count();
-    let first_is_multiline = parts.slots[first_non_empty]
-        .as_deref()
-        .is_some_and(|arg| arg.contains('\n'));
-    leading_hole && first_is_multiline && non_empty_count > 1
+    let leading_hole = slots[0].is_empty_hole();
+    let non_empty_count = slots.iter().filter(|s| !s.is_empty_hole()).count();
+    leading_hole && slots[first].has_forced_break() && non_empty_count > 1
 }
 
-fn first_non_empty_slot(parts: &SubsetArgParts) -> Option<usize> {
-    parts
-        .slots
-        .iter()
-        .position(|slot| slot.as_deref().is_some_and(|arg| !arg.is_empty()))
+/// The flat (inline) separator for the gap after slot `idx`. Adjacent holes
+/// before the first real argument collapse to a bare `,`; everything else gets
+/// `, `. Mirrors `format_subset_args_inline_from_parts`.
+fn flat_subset_sep(
+    slots: &[SubsetSlot],
+    idx: usize,
+    first_non_empty: Option<usize>,
+    no_non_empty: bool,
+) -> &'static str {
+    let left_empty = slots[idx].is_empty_hole();
+    let right_empty = slots[idx + 1].is_empty_hole();
+    let compact = left_empty
+        && right_empty
+        && (no_non_empty || first_non_empty.is_some_and(|first| idx + 1 < first));
+    if compact { "," } else { ", " }
 }
 
-fn format_subset_args_multiline(
-    parts: &SubsetArgParts,
-    indent: usize,
-    ctx: FormatContext,
-    has_multiline_arg: bool,
-) -> Result<String, FormatError> {
-    let inline = format_subset_args_inline_from_parts(parts, true);
-    if !has_multiline_arg {
-        let candidate = format!("[{inline}]");
-        if !ctx.fits_with_newlines(indent, &candidate) {
-            return format_subset_args_multiline_wrapped(parts, indent, ctx);
-        }
-    }
+fn build_subset_group(
+    slots: &[SubsetSlot],
+    open: &str,
+    close: &str,
+    first_non_empty: Option<usize>,
+    no_non_empty: bool,
+    force: bool,
+    hug_leading_hole: bool,
+) -> Ir {
+    let n = slots.len();
+    let start = usize::from(hug_leading_hole);
 
-    let mut out = String::new();
-    let leading_hole = parts
-        .slots
-        .first()
-        .is_some_and(|slot| slot.as_deref().is_none_or(str::is_empty));
-    let hug_leading_hole = leading_hole && !parts.has_comment_prefixed_expr_slot;
-    if hug_leading_hole {
-        out.push(',');
-    }
-    out.push('\n');
-
-    let first_non_empty = first_non_empty_slot(parts).unwrap_or(0);
-    let item_indent = ctx.indent_text(indent + 1);
-    for idx in (if hug_leading_hole { 1 } else { 0 })..parts.slots.len() {
-        if idx > first_non_empty
-            && parts.slots[idx]
-                .as_deref()
-                .is_some_and(|arg| arg.contains('\n'))
-        {
-            return format_subset_args_multiline_wrapped(parts, indent, ctx);
-        }
-
-        if let Some(arg) = parts.slots[idx].as_deref() {
-            if arg.is_empty() {
-                out.push_str(&item_indent);
-                if idx + 1 < parts.slots.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-                continue;
-            }
-            let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
-            if lines.is_empty() {
-                continue;
-            }
-            lines[0] = format!("{item_indent}{}", lines[0]);
-            for line in lines.iter_mut().skip(1) {
-                *line = format!("{item_indent}{line}");
-            }
-            if idx + 1 < parts.slots.len()
-                && let Some(last) = lines.last_mut()
-            {
-                last.push(',');
-            }
-            out.push_str(&lines.join("\n"));
-            out.push('\n');
+    let mut body: Vec<Ir> = Vec::new();
+    for idx in start..n {
+        let is_last = idx + 1 == n;
+        // A trailing empty slot whose predecessor is also empty is dropped
+        // (matching the legacy wrapped renderer): `fn[a, , b, , ]` keeps the
+        // comma but not a final blank line.
+        if is_last && idx > 0 && slots[idx - 1].is_empty_hole() && slots[idx].is_empty_hole() {
             continue;
         }
-
-        out.push_str(&item_indent);
-        if idx + 1 < parts.slots.len() {
-            out.push(',');
+        body.push(Ir::soft_line());
+        body.push(slots[idx].content());
+        if !is_last {
+            let sep = flat_subset_sep(slots, idx, first_non_empty, no_non_empty);
+            body.push(Ir::if_break(Ir::text(sep), Ir::text(",")));
         }
-        out.push('\n');
     }
 
-    out.push_str(&ctx.indent_text(indent));
-    Ok(out)
-}
-
-fn format_subset_args_multiline_wrapped(
-    parts: &SubsetArgParts,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    let mut out = String::from("\n");
-    let item_indent = ctx.indent_text(indent + 1);
-    for idx in 0..parts.slots.len() {
-        let is_last = idx + 1 == parts.slots.len();
-        let prev_is_empty = idx > 0 && parts.slots[idx - 1].as_deref().is_none_or(str::is_empty);
-        if is_last && prev_is_empty && parts.slots[idx].as_deref().is_none_or(str::is_empty) {
-            continue;
-        }
-        if let Some(arg) = parts.slots[idx].as_deref() {
-            if arg.is_empty() {
-                out.push_str(&item_indent);
-                if idx + 1 < parts.slots.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-                continue;
-            }
-            let mut lines: Vec<String> = arg.lines().map(|line| line.to_string()).collect();
-            if lines.is_empty() {
-                continue;
-            }
-            lines[0] = format!("{item_indent}{}", lines[0]);
-            for line in lines.iter_mut().skip(1) {
-                *line = format!("{item_indent}{line}");
-            }
-            if idx + 1 < parts.slots.len()
-                && let Some(last) = lines.last_mut()
-            {
-                last.push(',');
-            }
-            out.push_str(&lines.join("\n"));
-            out.push('\n');
-            continue;
-        }
-        out.push_str(&item_indent);
-        if idx + 1 < parts.slots.len() {
-            out.push(',');
-        }
-        out.push('\n');
-    }
-    out.push_str(&ctx.indent_text(indent));
-    Ok(out)
-}
-
-fn bracket_open_text(kind: SyntaxKind) -> &'static str {
-    match kind {
-        SyntaxKind::LBRACK => "[",
-        SyntaxKind::LBRACK2 => "[[",
-        _ => "",
+    let inner = Ir::concat([
+        Ir::text(open),
+        if hug_leading_hole {
+            Ir::text(",")
+        } else {
+            Ir::nil()
+        },
+        Ir::indent(Ir::concat(body)),
+        Ir::soft_line(),
+        Ir::text(close),
+    ]);
+    if force {
+        Ir::group_expanded(inner)
+    } else {
+        Ir::group(inner)
     }
 }
 
-fn bracket_close_text(kind: SyntaxKind) -> &'static str {
-    match kind {
-        SyntaxKind::RBRACK => "]",
-        SyntaxKind::RBRACK2 => "]]",
-        _ => "",
+fn build_subset_hug(
+    slots: &[SubsetSlot],
+    open: &str,
+    close: &str,
+    first_non_empty: Option<usize>,
+    no_non_empty: bool,
+) -> Ir {
+    let last = slots.len() - 1;
+
+    // Leading args (everything before the trailing block) render flat in the
+    // prefix; each is followed by its comma.
+    let mut leading: Vec<Ir> = vec![Ir::soft_line()];
+    for idx in 0..last {
+        leading.push(slots[idx].content());
+        leading.push(Ir::if_break(
+            Ir::text(flat_subset_sep(slots, idx, first_non_empty, no_non_empty)),
+            Ir::text(","),
+        ));
+        if idx + 1 < last {
+            leading.push(Ir::soft_line());
+        }
     }
+
+    let block_ir = slots[last].content();
+    let inner = Ir::concat([
+        Ir::text(open),
+        Ir::indent(Ir::concat(leading)),
+        // Flat: the block hugs the prefix. Broken: it drops to its own indented
+        // line so the whole list expands.
+        Ir::if_break(
+            block_ir.clone(),
+            Ir::indent(Ir::concat([Ir::soft_line(), block_ir])),
+        ),
+        Ir::soft_line(),
+        Ir::text(close),
+    ]);
+    Ir::group_hug(inner)
 }

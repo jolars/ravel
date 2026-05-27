@@ -10,7 +10,7 @@ use super::rules::control_flow::{
     try_format_repeat_with_external_body, try_format_while_with_external_body,
 };
 use super::rules::expressions::{
-    format_subset_expr, ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_unary_expr,
+    ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_subset_expr, ir_unary_expr,
 };
 use super::rules::functions::{format_call_expr, format_function_expr};
 use super::style::FormatStyle;
@@ -293,15 +293,15 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     if let Some(expr) = IfExpr::cast(node.clone()) {
         return ir_if_expr(expr.syntax(), indent, ctx);
     }
-    // Heavy arg-list constructs (subset/call/function) keep their specialized
-    // renderers and compose into the IR verbatim: their wrapping is an
-    // idiosyncratic string algorithm that does not map to a clean IR group, so a
-    // faithful port would change output. Native IR arg-wrapping is a follow-up.
+    // Subset arg lists are rendered natively on the IR. Call and function arg
+    // lists still compose into the IR verbatim via their string renderers
+    // (their wrapping is migrated in later steps); nested subsets inside those
+    // still reach `format_subset_expr` through the string dispatcher.
     if matches!(
         node.kind(),
         SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
     ) {
-        return Ok(Ir::verbatim(format_subset_expr(node, indent, ctx)?));
+        return ir_subset_expr(node, indent, ctx);
     }
     if let Some(expr) = CallExpr::cast(node.clone()) {
         return Ok(Ir::verbatim(format_call_expr(expr.syntax(), indent, ctx)?));

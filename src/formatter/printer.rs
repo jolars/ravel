@@ -145,8 +145,8 @@ impl Printer {
                     let chosen = if mode == Mode::Break { broken } else { flat };
                     stack.push((indent, mode, chosen));
                 }
-                Ir::Group { inner, expand } => {
-                    let m = if *expand || !self.fits(w.col, inner) {
+                Ir::Group { inner, expand, hug } => {
+                    let m = if *expand || !self.fits(w.col, inner, *hug) {
                         Mode::Break
                     } else {
                         Mode::Flat
@@ -160,7 +160,12 @@ impl Printer {
 
     /// Simulate `node` flat, starting at column `start_col`. Returns false on the
     /// first forced break or as soon as the running width exceeds the line.
-    fn fits(&self, start_col: usize, node: &Ir) -> bool {
+    ///
+    /// When `hug` is set, a forced line break (`HardLine`/`EmptyLine`) instead
+    /// stops the measurement *successfully*: only the prefix up to a trailing
+    /// block's opening brace needs to fit. A forced-break `Verbatim` (a comment)
+    /// still fails, so a comment in the prefix prevents hugging.
+    fn fits(&self, start_col: usize, node: &Ir, hug: bool) -> bool {
         let mut remaining = self.line_width.saturating_sub(start_col);
         let mut stack: Vec<&Ir> = vec![node];
         while let Some(node) = stack.pop() {
@@ -173,7 +178,7 @@ impl Printer {
                     }
                     remaining -= w;
                 }
-                Ir::HardLine | Ir::EmptyLine => return false,
+                Ir::HardLine | Ir::EmptyLine => return hug,
                 Ir::Verbatim { text, force_break } => {
                     if *force_break {
                         return false;
@@ -197,7 +202,7 @@ impl Printer {
                     remaining -= 1;
                 }
                 Ir::IfBreak { flat, .. } => stack.push(flat),
-                Ir::Group { inner, expand } => {
+                Ir::Group { inner, expand, .. } => {
                     if *expand {
                         return false;
                     }
@@ -206,5 +211,77 @@ impl Printer {
             }
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A block that always breaks: `{`, an indented body, then `}`.
+    fn block() -> Ir {
+        Ir::concat([
+            Ir::text("{"),
+            Ir::indent(Ir::concat([Ir::hard_line(), Ir::text("body")])),
+            Ir::hard_line(),
+            Ir::text("}"),
+        ])
+    }
+
+    /// `f(a, {block})` as a hug group: prefix `f(a, ` then a trailing block.
+    fn hug_call() -> Ir {
+        Ir::group_hug(Ir::concat([
+            Ir::text("f("),
+            Ir::indent(Ir::concat([
+                Ir::soft_line(),
+                Ir::text("a"),
+                Ir::if_break(Ir::text(", "), Ir::text(",")),
+            ])),
+            Ir::if_break(block(), Ir::indent(Ir::concat([Ir::soft_line(), block()]))),
+            Ir::soft_line(),
+            Ir::text(")"),
+        ]))
+    }
+
+    #[test]
+    fn hug_group_keeps_prefix_flat_when_it_fits() {
+        let printer = Printer::new(FormatStyle::default());
+        assert_eq!(printer.print(&hug_call()), "f(a, {\n  body\n})");
+    }
+
+    #[test]
+    fn hug_group_expands_when_prefix_does_not_fit() {
+        // A narrow line forces even the short prefix `f(a, {` to break.
+        let style = FormatStyle {
+            line_width: 5,
+            indent_width: 2,
+        };
+        let printer = Printer::new(style);
+        assert_eq!(
+            printer.print(&hug_call()),
+            "f(\n  a,\n  {\n    body\n  }\n)"
+        );
+    }
+
+    #[test]
+    fn hug_group_expands_when_prefix_has_a_comment() {
+        // A forced-break verbatim (a comment) in the prefix prevents hugging
+        // even though the prefix is short.
+        let printer = Printer::new(FormatStyle::default());
+        let ir = Ir::group_hug(Ir::concat([
+            Ir::text("f("),
+            Ir::indent(Ir::concat([
+                Ir::soft_line(),
+                Ir::verbatim_forced("# c"),
+                Ir::hard_line(),
+                Ir::text("a"),
+                Ir::if_break(Ir::text(", "), Ir::text(",")),
+            ])),
+            Ir::if_break(block(), Ir::indent(Ir::concat([Ir::soft_line(), block()]))),
+            Ir::soft_line(),
+            Ir::text(")"),
+        ]));
+        // Expanded: the comment lands on its own line and the block is indented.
+        assert_eq!(printer.print(&ir), "f(\n  # c\n  a,\n  {\n    body\n  }\n)");
     }
 }

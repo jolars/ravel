@@ -38,7 +38,18 @@ pub(crate) enum Ir {
     /// A break-decision boundary. The printer measures the flat rendering of
     /// `inner`; if it fits and contains no forced break, it prints flat,
     /// otherwise broken. `expand` forces broken unconditionally.
-    Group { inner: Rc<Ir>, expand: bool },
+    ///
+    /// `hug` enables trailing-block hugging: the fit measurement stops
+    /// *successfully* at the first forced line break (the opening of a trailing
+    /// block) rather than failing on it. This lets a group whose last element is
+    /// a block (`f(a, {`…`})`) stay flat — the prefix hugs the block's open
+    /// brace — when only the prefix needs to fit. A comment in the prefix
+    /// (`Verbatim { force_break: true }`) still fails the fit, forcing expansion.
+    Group {
+        inner: Rc<Ir>,
+        expand: bool,
+        hug: bool,
+    },
     /// Emit `flat` when the enclosing group is flat, `broken` when it is broken.
     IfBreak { flat: Rc<Ir>, broken: Rc<Ir> },
     /// Pre-rendered text (comments, or not-yet-migrated constructs) spliced
@@ -83,6 +94,7 @@ impl Ir {
         Ir::Group {
             inner: Rc::new(inner),
             expand: false,
+            hug: false,
         }
     }
 
@@ -90,6 +102,18 @@ impl Ir {
         Ir::Group {
             inner: Rc::new(inner),
             expand: true,
+            hug: false,
+        }
+    }
+
+    /// A group that hugs a trailing block: the printer keeps it flat as long as
+    /// the prefix up to the block's opening brace fits, then lets the block
+    /// break onto its own lines. See [`Ir::Group`]'s `hug` field.
+    pub(crate) fn group_hug(inner: Ir) -> Ir {
+        Ir::Group {
+            inner: Rc::new(inner),
+            expand: false,
+            hug: true,
         }
     }
 
@@ -139,5 +163,22 @@ impl Ir {
 
     pub(crate) fn nil() -> Ir {
         Ir::Nil
+    }
+
+    /// Whether this tree contains an *unconditional* forced line break: a
+    /// `HardLine`/`EmptyLine`, a force-break `Verbatim` (e.g. a comment), or an
+    /// `expand` group. Conditional breaks (`IfBreak` branches, `SoftLine`,
+    /// `Line`) do not count, since they only break when an enclosing group does.
+    /// Used to detect, e.g., a non-empty block argument that should force its
+    /// arg list open.
+    pub(crate) fn contains_forced_break(&self) -> bool {
+        match self {
+            Ir::HardLine | Ir::EmptyLine => true,
+            Ir::Verbatim { force_break, .. } => *force_break,
+            Ir::Concat(items) => items.iter().any(Ir::contains_forced_break),
+            Ir::Indent(inner) => inner.contains_forced_break(),
+            Ir::Group { inner, expand, .. } => *expand || inner.contains_forced_break(),
+            Ir::Text(_) | Ir::Line | Ir::SoftLine | Ir::IfBreak { .. } | Ir::Nil => false,
+        }
     }
 }
