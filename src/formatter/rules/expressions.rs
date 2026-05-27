@@ -3,7 +3,9 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_expr_segment, format_expr_with_optional_comment, format_line,
+    ir_expr_segment,
 };
+use super::super::ir::Ir;
 use super::super::trivia::split_lines;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
@@ -68,6 +70,45 @@ pub(crate) fn format_assignment_expr(
     let lhs = format_expr_segment(&elements[..op_idx], "assignment lhs", indent, ctx)?;
     let rhs = format_expr_segment(&elements[op_idx + 1..], "assignment rhs", indent, ctx)?;
     Ok(format!("{lhs} {op} {rhs}"))
+}
+
+/// IR builder for assignment. Mirrors [`format_assignment_expr`]: the operands
+/// are space-separated around the operator with no width-driven wrapping of its
+/// own (any wrapping comes from the operands' own IR).
+pub(crate) fn ir_assignment_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let op_idx = elements
+        .iter()
+        .position(|el| {
+            matches!(
+                el,
+                NodeOrToken::Token(tok)
+                    if matches!(
+                        tok.kind(),
+                        SyntaxKind::ASSIGN_LEFT
+                            | SyntaxKind::SUPER_ASSIGN
+                            | SyntaxKind::ASSIGN_RIGHT
+                            | SyntaxKind::SUPER_ASSIGN_RIGHT
+                            | SyntaxKind::ASSIGN_EQ
+                    )
+            )
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "assignment operator not found",
+            snippet: node.text().to_string(),
+        })?;
+
+    let op = match &elements[op_idx] {
+        NodeOrToken::Token(tok) => tok.text().to_string(),
+        NodeOrToken::Node(_) => unreachable!(),
+    };
+    let lhs = ir_expr_segment(&elements[..op_idx], "assignment lhs", indent, ctx)?;
+    let rhs = ir_expr_segment(&elements[op_idx + 1..], "assignment rhs", indent, ctx)?;
+    Ok(Ir::concat([lhs, Ir::text(format!(" {op} ")), rhs]))
 }
 
 pub(crate) fn format_binary_expr(
