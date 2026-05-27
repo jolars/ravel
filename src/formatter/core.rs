@@ -102,11 +102,60 @@ fn validate_supported_tokens(root: &SyntaxNode) -> Result<(), FormatError> {
 }
 
 fn format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatError> {
-    // Bridge: render via the legacy path, then route through the IR printer as a
-    // single verbatim node. Constructs migrate off this bridge one step at a time.
-    let legacy = legacy_format_root(root, ctx)?;
-    let ir = Ir::verbatim(legacy);
+    let ir = ir_root(root, ctx)?;
     Ok(Printer::new(ctx.style()).print(&ir))
+}
+
+/// IR builder for the whole document. Mirrors [`legacy_format_root`]: statements
+/// are separated by hard breaks (a blank line where a gap should be preserved),
+/// control-flow forms whose body is on a following line are rendered via the
+/// (bridged) external-body handlers, and everything else is an [`ir_line`].
+fn ir_root(root: &SyntaxNode, ctx: FormatContext) -> Result<Ir, FormatError> {
+    let lines = split_lines(root.children_with_tokens().collect(), "root")?;
+    if lines.is_empty() {
+        return Ok(Ir::nil());
+    }
+
+    let mut items: Vec<Ir> = Vec::new();
+    let mut idx = 0usize;
+    let mut first = true;
+    while idx < lines.len() {
+        if !first {
+            if should_insert_comment_for_gap(&lines, idx, 0, ctx)? {
+                items.push(Ir::empty_line());
+            } else {
+                items.push(Ir::hard_line());
+            }
+        }
+        first = false;
+
+        let consumed = if let Some((formatted, consumed)) =
+            try_format_for_with_external_body(&lines, idx, 0, ctx)?
+        {
+            items.push(Ir::verbatim(formatted));
+            consumed
+        } else if let Some((formatted, consumed)) =
+            try_format_while_with_external_body(&lines, idx, 0, ctx)?
+        {
+            items.push(Ir::verbatim(formatted));
+            consumed
+        } else if let Some((formatted, consumed)) =
+            try_format_if_with_external_body(&lines, idx, 0, ctx)?
+        {
+            items.push(Ir::verbatim(formatted));
+            consumed
+        } else if let Some((formatted, consumed)) =
+            try_format_repeat_with_external_body(&lines, idx, 0, ctx)?
+        {
+            items.push(Ir::verbatim(formatted));
+            consumed
+        } else {
+            items.push(ir_line(&lines[idx], 0, ctx)?);
+            0
+        };
+        idx += consumed + 1;
+    }
+    Ok(Ir::concat(items))
 }
 
 fn legacy_format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatError> {
