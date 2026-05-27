@@ -259,11 +259,18 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       trailing function's params must break now expands one arg per line instead
       of hugging `callee(x, function(` — ravel's single-pass printer cannot
       reproduce the legacy two-phase "format the function, then measure" hug.
+- [x] **Curly-curly `{{ }}` call args → native IR.** Dropped the curly-curly
+      check from `call_needs_legacy`; `ir_call_argument` now builds `{{ x }}`
+      natively via `ir_curly_curly` (flat `{{ x }}`, or a group the printer
+      re-indents when the symbol overflows) instead of bridging a `Verbatim`
+      string. Byte-identical on every fixture and additionally fixes the
+      mis-indented multi-line `{{ <long symbol> }}` case the verbatim bridge got
+      wrong. Commented curly-curly forms still route to legacy via the comment
+      gate (folds into comment relocation below).
 - [ ] **Migrate the remaining legacy call/param fallbacks to native IR.**
       `ir_call_expr` / `ir_function_expr` still defer to the string renderers for
-      arg/param lists carrying comments (relocation unported) and for curly-curly
-      `{{ }}` args. Porting comment relocation is the last blocker for removing
-      the fallbacks.
+      arg/param lists carrying comments (relocation unported). Porting comment
+      relocation is the last blocker for removing the fallbacks.
 - [ ] Once those fallbacks are gone, retire the now-dead string renderers
       (`format_call_expr`, `format_function_expr`, and their param/arg helpers)
       and the retained `fits_inline` / `fits_with_newlines` width helpers
