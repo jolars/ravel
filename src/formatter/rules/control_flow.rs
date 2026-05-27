@@ -412,6 +412,20 @@ pub(crate) fn format_repeat_expr(
     Ok(format!("repeat {body}"))
 }
 
+/// IR builder for if/else. Unlike loops, if/else has no width-driven wrapping
+/// (the condition is always inlined and branch bodies are always-multiline
+/// blocks), and its comment/auto-brace handling is intricately string-based, so
+/// it is rendered by the dedicated [`format_if_expr`] renderer and composed into
+/// the IR verbatim. `Ir::verbatim` forces a break only when the rendering spans
+/// multiple lines, matching how the bridged renderer behaved inline.
+pub(crate) fn ir_if_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    Ok(Ir::verbatim(format_if_expr(node, indent, ctx)?))
+}
+
 /// IR builder for `for`. Mirrors [`format_for_expr`].
 pub(crate) fn ir_for_expr(
     node: &SyntaxNode,
