@@ -267,10 +267,29 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       mis-indented multi-line `{{ <long symbol> }}` case the verbatim bridge got
       wrong. Commented curly-curly forms still route to legacy via the comment
       gate (folds into comment relocation below).
-- [ ] **Migrate the remaining legacy call/param fallbacks to native IR.**
-      `ir_call_expr` / `ir_function_expr` still defer to the string renderers for
-      arg/param lists carrying comments (relocation unported). Porting comment
-      relocation is the last blocker for removing the fallbacks.
+- [ ] **Migrate native IR comment relocation for call/param arg lists.**
+      *(own session — large, intricate)* `ir_call_expr` / `ir_function_expr`
+      still defer to the legacy string renderers whenever the arg/param list
+      carries *any* comment (the `descendants_with_tokens().any(COMMENT)` gate in
+      `call_needs_legacy`, and the param equivalent). This is the **last blocker**
+      for retiring the dead renderers (next item). Scope: ~176 comment-mentions
+      in `rules/functions.rs` plus dedicated helpers — `collect_call_arg_parts`,
+      `append_trailing_comment`, `format_assignment_rhs_with_leading_comments`,
+      `prepend_comments_to_formatted_block`, `prepend_function_leading_comments`,
+      `format_function_parameters_without_comments`. The behavior to reproduce is
+      encoded in the fixtures: `call_comments_basic`, `call_comments_inside_holes`
+      (the hard one — a dozen+ rules for whether a comment leads a hole, trails
+      the prior arg on the same line, or stands alone; "trailing `,` commentB
+      stays on `b`"), `call_comments_after_holes`,
+      `call_comments_trailing_braced_expression`, `call_comments_sanity`,
+      `function_definition_comments`, and the comment-lifting in
+      `braced_curly_curly_advanced` (comments hoisted out of nested `{`). Approach:
+      port the slot classifier to emit comment-bearing `ArgSlot`s with
+      `verbatim_forced` comment lines (forcing `group_expanded`), preserving the
+      same-line-vs-own-line decision; narrow the `COMMENT` gate incrementally
+      (e.g. trailing-only comments first, then leading, then holes), TDD against
+      each fixture, keeping byte-identical. Likely benefits from / overlaps the
+      conditional-group printer work below (shared `fits_with_newlines` reliance).
 - [ ] Once those fallbacks are gone, retire the now-dead string renderers
       (`format_call_expr`, `format_function_expr`, and their param/arg helpers)
       and the retained `fits_inline` / `fits_with_newlines` width helpers
