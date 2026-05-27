@@ -3,9 +3,11 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_expr_element, format_expr_segment, format_expr_with_optional_comment,
-    ir_expr_segment, snippet_from_elements,
+    ir_block_expr_with_prefixed_comments, ir_expr_element, ir_expr_segment, ir_line,
+    snippet_from_elements,
 };
 use super::super::ir::Ir;
+use super::super::trivia::split_lines;
 use super::expressions::{
     ArgSlot, build_arg_group, build_arg_hug, expr_ends_in_block, should_force_leading_hole_expand,
 };
@@ -1387,6 +1389,367 @@ fn format_named_assignment(name: &str, value: &str) -> String {
     } else {
         format!("{name} = {value}")
     }
+}
+
+// ============================ Native IR function ============================
+//
+// `ir_function_expr` renders `function(params) body` / `\(params) body`
+// natively. The param list reuses the shared arg-group machinery; the body is
+// chosen by the printer between a bare inline form (flat) and a braced block
+// (broken) via a conditional group, with the param list an independent nested
+// group so it breaks on its own width even when the body braces. Functions whose
+// params/surrounds carry comments, whose params hold a brace-token default
+// (`a = { ... }`, which the parser leaves as raw braces), or whose bare body is
+// intrinsically multi-line fall back to the legacy string renderer (comment
+// relocation and the `fits_with_newlines` wrap-in-place layout are unported).
+
+pub(crate) fn ir_function_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let fn_idx = elements
+        .iter()
+        .position(
+            |el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::FUNCTION_KW),
+        )
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing 'function' keyword",
+            snippet: node.text().to_string(),
+        })?;
+    let head = match &elements[fn_idx] {
+        NodeOrToken::Token(tok) if tok.text() == "\\" => "\\",
+        _ => "function",
+    };
+    let lparen_idx = elements
+        .iter()
+        .enumerate()
+        .skip(fn_idx + 1)
+        .find_map(|(i, el)| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN => Some(i),
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '(' in function expression",
+            snippet: node.text().to_string(),
+        })?;
+    let mut depth = 0;
+    let rparen_idx = elements
+        .iter()
+        .enumerate()
+        .skip(lparen_idx)
+        .find_map(|(i, el)| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN => {
+                depth += 1;
+                None
+            }
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RPAREN => {
+                depth -= 1;
+                if depth == 0 { Some(i) } else { None }
+            }
+            _ => None,
+        })
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing ')' in function expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    let param_elements = &elements[lparen_idx + 1..rparen_idx];
+    let body_elements = &elements[rparen_idx + 1..];
+
+    if function_needs_legacy(&elements, fn_idx, lparen_idx, param_elements, body_elements) {
+        return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
+    }
+
+    let params_ir = ir_function_params(param_elements, indent, ctx)?;
+
+    let body_core: Vec<_> = body_elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if body_core.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "missing function body expression",
+            snippet: node.text().to_string(),
+        });
+    }
+
+    let head_ir = Ir::text(head);
+    let body_node = single_node(&body_core);
+
+    if let Some(block) = body_node
+        .as_ref()
+        .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+    {
+        let block_ir = ir_block_expr_with_prefixed_comments(block, indent, ctx, &[])?;
+        if let Some(stmt_ir) = try_flatten_function_block(block, indent, ctx)? {
+            return Ok(function_body_choice(head_ir, params_ir, stmt_ir, block_ir));
+        }
+        return Ok(function_braced_hug(head_ir, params_ir, block_ir));
+    }
+
+    // Bare (non-block) body. A body whose IR carries a forced break (e.g. an
+    // `if` with braced arms) is kept bare and multi-line by the legacy renderer
+    // when each line fits; defer to it rather than force-bracing the body.
+    let body_ir = ir_expr_segment(&body_core, "function body", indent, ctx)?;
+    if body_ir.contains_forced_break() {
+        return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
+    }
+    let braced = brace_wrap_body(body_ir.clone());
+    Ok(function_body_choice(head_ir, params_ir, body_ir, braced))
+}
+
+/// The conditional group choosing the bare inline body (flat) vs the braced
+/// block (broken). The flat branch is measured by the outer group, so the bare
+/// form is used exactly when `head(params) bare_body` fits. The broken branch is
+/// the braced-block hug, which then decides the param-list break on its own.
+fn function_body_choice(head: Ir, params: Ir, bare_body: Ir, braced_body: Ir) -> Ir {
+    Ir::group(Ir::if_break(
+        Ir::concat([head.clone(), params.clone(), Ir::text(" "), bare_body]),
+        function_braced_hug(head, params, braced_body),
+    ))
+}
+
+/// `head(params) <block>` as a hug group: the param list stays inline as long as
+/// `head(params) {` fits (the printer's fit measurement stops at the block's
+/// opening brace), otherwise the params break one per line. The block's own hard
+/// breaks lay out its body regardless.
+fn function_braced_hug(head: Ir, params: Ir, block: Ir) -> Ir {
+    Ir::group_hug(Ir::concat([head, params, Ir::text(" "), block]))
+}
+
+/// Wrap a bare body expression in a block on its own indented line.
+fn brace_wrap_body(body: Ir) -> Ir {
+    Ir::concat([
+        Ir::text("{"),
+        Ir::indent(Ir::concat([Ir::hard_line(), body])),
+        Ir::hard_line(),
+        Ir::text("}"),
+    ])
+}
+
+/// Whether a function definition must use the legacy renderer (see the section
+/// header): any comment around the params/body, or a brace-token default.
+fn function_needs_legacy(
+    elements: &[SyntaxElement<RLanguage>],
+    fn_idx: usize,
+    lparen_idx: usize,
+    param_elements: &[SyntaxElement<RLanguage>],
+    body_elements: &[SyntaxElement<RLanguage>],
+) -> bool {
+    let leading_fn_comment = elements[fn_idx + 1..lparen_idx]
+        .iter()
+        .any(|el| el.kind() == SyntaxKind::COMMENT);
+    let param_comment = param_elements
+        .iter()
+        .any(|el| el.kind() == SyntaxKind::COMMENT);
+    // `body_elements` are the direct children after `)`, so a comment token here
+    // is a body-leading or trailing comment (in-block comments live inside the
+    // body node and are handled natively).
+    let body_outer_comment = body_elements
+        .iter()
+        .any(|el| el.kind() == SyntaxKind::COMMENT);
+    let brace_default = param_elements
+        .iter()
+        .any(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LBRACE));
+    leading_fn_comment || param_comment || body_outer_comment || brace_default
+}
+
+/// Build the `( ... )` param list as a bare concat (no enclosing group): empty
+/// params collapse to `()`, otherwise the params are soft-line separated inside
+/// an indent so an enclosing group can lay them inline or one per line. The
+/// caller wraps this in the group that owns the break decision.
+fn ir_function_params(
+    param_elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let significant: Vec<_> = param_elements
+        .iter()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .cloned()
+        .collect();
+    if significant.is_empty() {
+        return Ok(Ir::text("()"));
+    }
+
+    let segments = split_function_param_segments(&significant)?;
+    let mut params: Vec<Ir> = Vec::with_capacity(segments.len());
+    for param in &segments {
+        params.push(ir_function_parameter(param, indent, ctx)?);
+    }
+
+    let mut body: Vec<Ir> = Vec::new();
+    for (idx, param) in params.into_iter().enumerate() {
+        if idx > 0 {
+            body.push(Ir::if_break(Ir::text(", "), Ir::text(",")));
+        }
+        body.push(Ir::soft_line());
+        body.push(param);
+    }
+    Ok(Ir::concat([
+        Ir::text("("),
+        Ir::indent(Ir::concat(body)),
+        Ir::soft_line(),
+        Ir::text(")"),
+    ]))
+}
+
+fn ir_function_parameter(
+    param: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    if let Some(eq_idx) = param
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::ASSIGN_EQ))
+    {
+        let name = ir_expr_segment(&param[..eq_idx], "function parameter name", indent, ctx)?;
+        let value = ir_function_param_default(&param[eq_idx + 1..], indent, ctx)?;
+        return Ok(Ir::concat([name, Ir::text(" = "), value]));
+    }
+    ir_expr_segment(param, "function parameter", indent, ctx)
+}
+
+/// Render a parameter default. The parser builds no nodes inside the param list,
+/// so a non-trivial default arrives as a raw run of tokens (`c(1, 2, 3)` is
+/// `IDENT ( INT , INT , INT )`); reparse it into a single expression. (Brace
+/// defaults route the whole function to the legacy renderer, so none arrive
+/// here.)
+fn ir_function_param_default(
+    elements: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    if let [only] = elements {
+        return ir_expr_element(only, indent, ctx);
+    }
+    let snippet = snippet_from_elements(elements);
+    let parsed = parse(&snippet);
+    if !parsed.diagnostics.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "function parameter default",
+            snippet,
+        });
+    }
+    let reparsed: Vec<_> = parsed
+        .cst
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    let [only] = reparsed.as_slice() else {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "function parameter default",
+            snippet,
+        });
+    };
+    ir_expr_element(only, indent, ctx)
+}
+
+/// Split params on top-level commas, preserving the legacy splitter's errors on
+/// an empty parameter or a trailing comma.
+fn split_function_param_segments(
+    significant: &[SyntaxElement<RLanguage>],
+) -> Result<Vec<Vec<SyntaxElement<RLanguage>>>, FormatError> {
+    let mut params: Vec<Vec<SyntaxElement<RLanguage>>> = Vec::new();
+    let mut current: Vec<SyntaxElement<RLanguage>> = Vec::new();
+    let mut depth = 0usize;
+    for element in significant {
+        match element {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMA && depth == 0 => {
+                if current.is_empty() {
+                    return Err(FormatError::AmbiguousConstruct {
+                        context: "empty function parameter",
+                        snippet: tok.text().to_string(),
+                    });
+                }
+                params.push(std::mem::take(&mut current));
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::LPAREN
+                        | SyntaxKind::LBRACE
+                        | SyntaxKind::LBRACK
+                        | SyntaxKind::LBRACK2
+                ) =>
+            {
+                depth += 1;
+                current.push(element.clone());
+            }
+            NodeOrToken::Token(tok)
+                if matches!(
+                    tok.kind(),
+                    SyntaxKind::RPAREN
+                        | SyntaxKind::RBRACE
+                        | SyntaxKind::RBRACK
+                        | SyntaxKind::RBRACK2
+                ) =>
+            {
+                depth = depth.saturating_sub(1);
+                current.push(element.clone());
+            }
+            _ => current.push(element.clone()),
+        }
+    }
+    if current.is_empty() {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "trailing comma in function parameters",
+            snippet: snippet_from_elements(significant),
+        });
+    }
+    params.push(current);
+    Ok(params)
+}
+
+/// When a block body is exactly one comment-free statement, return that
+/// statement's IR so the printer can flatten `function(p) { stmt }` to
+/// `function(p) stmt` when it fits; otherwise `None` (keep it braced).
+fn try_flatten_function_block(
+    block: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<Ir>, FormatError> {
+    if block
+        .descendants_with_tokens()
+        .any(|el| el.kind() == SyntaxKind::COMMENT)
+    {
+        return Ok(None);
+    }
+    let elements: Vec<_> = block.children_with_tokens().collect();
+    let Some(open_idx) = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LBRACE))
+    else {
+        return Ok(None);
+    };
+    let Some(close_idx) = elements
+        .iter()
+        .rposition(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RBRACE))
+    else {
+        return Ok(None);
+    };
+    if close_idx <= open_idx {
+        return Ok(None);
+    }
+    let lines = split_lines(
+        elements[open_idx + 1..close_idx].to_vec(),
+        "function body block",
+    )?;
+    let mut stmt: Option<Ir> = None;
+    for line in &lines {
+        let ir = ir_line(line, indent, ctx)?;
+        if matches!(ir, Ir::Nil) {
+            continue;
+        }
+        if stmt.is_some() {
+            return Ok(None);
+        }
+        stmt = Some(ir);
+    }
+    Ok(stmt)
 }
 
 pub(crate) fn format_function_expr(

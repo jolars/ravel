@@ -12,7 +12,7 @@ use super::rules::control_flow::{
 use super::rules::expressions::{
     ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_subset_expr, ir_unary_expr,
 };
-use super::rules::functions::{format_function_expr, ir_call_expr};
+use super::rules::functions::{ir_call_expr, ir_function_expr};
 use super::style::FormatStyle;
 use super::trivia::{is_trivia as is_trivia_kind, split_lines};
 use crate::ast::{
@@ -293,10 +293,10 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     if let Some(expr) = IfExpr::cast(node.clone()) {
         return ir_if_expr(expr.syntax(), indent, ctx);
     }
-    // Subset and call arg lists are rendered natively on the IR. Calls that
-    // contain comments or function-definition args fall back to the legacy
-    // string renderer inside `ir_call_expr`. Function definitions still compose
-    // into the IR verbatim via their string renderer (migrated separately).
+    // Subset, call, and function arg lists are rendered natively on the IR.
+    // Calls and function definitions fall back to the legacy string renderer
+    // (inside `ir_call_expr` / `ir_function_expr`) for the cases that involve
+    // comment relocation not yet ported to the IR.
     if matches!(
         node.kind(),
         SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
@@ -307,11 +307,7 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
         return ir_call_expr(expr.syntax(), indent, ctx);
     }
     if let Some(expr) = FunctionExpr::cast(node.clone()) {
-        return Ok(Ir::verbatim(format_function_expr(
-            expr.syntax(),
-            indent,
-            ctx,
-        )?));
+        return ir_function_expr(expr.syntax(), indent, ctx);
     }
 
     Err(FormatError::UnsupportedConstruct {
