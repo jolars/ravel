@@ -12,7 +12,7 @@ use super::rules::control_flow::{
 };
 use super::rules::expressions::{
     format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
-    format_unary_expr, ir_assignment_expr, ir_binary_expr, ir_unary_expr,
+    format_unary_expr, ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_unary_expr,
 };
 use super::rules::functions::{format_call_expr, format_function_expr};
 use super::style::FormatStyle;
@@ -236,6 +236,9 @@ fn ir_expr_node(node: &SyntaxNode, indent: usize, ctx: FormatContext) -> Result<
     if let Some(expr) = BinaryExpr::cast(node.clone()) {
         return ir_binary_expr(expr.syntax(), indent, ctx);
     }
+    if let Some(expr) = ParenExpr::cast(node.clone()) {
+        return ir_paren_expr(expr.syntax(), indent, ctx);
+    }
     // Not-yet-migrated constructs bridge through the legacy renderer.
     Ok(Ir::verbatim(legacy_format_expr_node(node, indent, ctx)?))
 }
@@ -266,6 +269,37 @@ pub(super) fn ir_expr_segment(
         });
     }
     ir_expr_element(&significant[0], indent, ctx)
+}
+
+/// IR counterpart of [`format_expr_with_optional_comment`]: a single expression
+/// optionally followed by a trailing comment on the same line.
+pub(super) fn ir_expr_with_optional_comment(
+    elements: &[SyntaxElement<RLanguage>],
+    context: &'static str,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let significant: Vec<_> = elements
+        .iter()
+        .filter(|el| !is_trivia_kind(el.kind()))
+        .cloned()
+        .collect();
+
+    if significant.len() == 2
+        && matches!(
+            significant.last(),
+            Some(NodeOrToken::Token(token)) if token.kind() == SyntaxKind::COMMENT
+        )
+    {
+        let expr = ir_expr_element(&significant[0], indent, ctx)?;
+        let comment = match &significant[1] {
+            NodeOrToken::Token(token) => token.text().to_string(),
+            NodeOrToken::Node(_) => unreachable!(),
+        };
+        return Ok(Ir::concat([expr, Ir::text(" "), Ir::text(comment)]));
+    }
+
+    ir_expr_segment(elements, context, indent, ctx)
 }
 
 fn legacy_format_expr_node(

@@ -3,7 +3,7 @@ use rowan::{NodeOrToken, SyntaxElement};
 use super::super::context::FormatContext;
 use super::super::core::{
     FormatError, format_expr_segment, format_expr_with_optional_comment, format_line,
-    ir_expr_segment,
+    ir_expr_segment, ir_expr_with_optional_comment,
 };
 use super::super::ir::Ir;
 use super::super::trivia::split_lines;
@@ -406,6 +406,49 @@ fn try_format_curly_curly(
         return Ok(None);
     }
     Ok(Some(format!("{{{{ {body} }}}}")))
+}
+
+/// IR builder for parenthesized expressions. Mirrors [`format_paren_expr`]:
+/// a single inner expression (optionally with a trailing comment) is wrapped
+/// inline in `( )` and lets the inner expression handle its own wrapping; the
+/// rarer multi-statement form is bridged through the legacy renderer.
+pub(crate) fn ir_paren_expr(
+    node: &SyntaxNode,
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Ir, FormatError> {
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let open_idx = elements
+        .iter()
+        .position(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::LPAREN))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing '(' in parenthesized expression",
+            snippet: node.text().to_string(),
+        })?;
+    let close_idx = elements
+        .iter()
+        .rposition(|el| matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::RPAREN))
+        .ok_or_else(|| FormatError::AmbiguousConstruct {
+            context: "missing ')' in parenthesized expression",
+            snippet: node.text().to_string(),
+        })?;
+
+    if close_idx <= open_idx {
+        return Err(FormatError::AmbiguousConstruct {
+            context: "invalid parenthesized expression bounds",
+            snippet: node.text().to_string(),
+        });
+    }
+
+    let inner_elements = &elements[open_idx + 1..close_idx];
+    if let Ok(inner) =
+        ir_expr_with_optional_comment(inner_elements, "parenthesized expression", indent, ctx)
+    {
+        return Ok(Ir::concat([Ir::text("("), inner, Ir::text(")")]));
+    }
+
+    // Multi-statement / empty parens: bridge through the legacy renderer.
+    Ok(Ir::verbatim(format_paren_expr(node, indent, ctx)?))
 }
 
 pub(crate) fn format_paren_expr(
