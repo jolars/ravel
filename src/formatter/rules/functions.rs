@@ -187,11 +187,11 @@ fn arg_is_named_function(arg: &SyntaxNode) -> bool {
 }
 
 /// Whether the call's arg list must use the legacy renderer: it contains a
-/// comment (comment relocation is unported), a curly-curly argument (its
-/// multi-line layout is legacy-string-specific), or a function-definition
-/// argument that itself renders via the legacy string path (see
-/// [`function_expr_needs_legacy`]). Natively-rendered function args flow
-/// through `ir_call_expr`'s recursion and the trailing-block hug.
+/// comment (comment relocation is unported) or a function-definition argument
+/// that itself renders via the legacy string path (see
+/// [`function_expr_needs_legacy`]). Natively-rendered function args flow through
+/// `ir_call_expr`'s recursion and the trailing-block hug; curly-curly `{{ x }}`
+/// args render natively (see [`ir_curly_curly`]).
 fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
     arg_list
         .descendants_with_tokens()
@@ -199,7 +199,7 @@ fn call_needs_legacy(arg_list: &SyntaxNode) -> bool {
         || arg_list
             .children()
             .filter(|n| n.kind() == SyntaxKind::ARG)
-            .any(|arg| arg_is_curly_curly(&arg) || arg_is_legacy_function(&arg))
+            .any(|arg| arg_is_legacy_function(&arg))
 }
 
 /// The function-definition node of a direct argument, if any: a bare
@@ -268,35 +268,79 @@ fn value_node_is_named_arg(node: &SyntaxNode) -> bool {
     })
 }
 
-/// A direct argument whose value is a curly-curly `{{ x }}` block.
-fn arg_is_curly_curly(arg: &SyntaxNode) -> bool {
-    arg.children().any(|n| is_curly_curly_block(&n))
+/// Native IR for a curly-curly `{{ x }}` call argument. Flat: `{{ x }}`; when the
+/// symbol can't fit inline the group breaks to put it on its own indented line.
+/// Returns `None` for any other shape (`{{ 1 }}`, `{{ (x) }}`, multi-statement,
+/// ...), which then formats as ordinary nested blocks. Comment-bearing forms
+/// never reach here — they route to the legacy renderer via [`call_needs_legacy`].
+fn ir_curly_curly(
+    significant: &[SyntaxElement<RLanguage>],
+    indent: usize,
+    ctx: FormatContext,
+) -> Result<Option<Ir>, FormatError> {
+    let Some(symbol) = curly_curly_inner_symbol(significant) else {
+        return Ok(None);
+    };
+    let inner = ir_expr_element(&symbol, indent + 1, ctx)?;
+    Ok(Some(Ir::group(Ir::concat([
+        Ir::text("{{"),
+        Ir::indent(Ir::concat([Ir::line(), inner])),
+        Ir::line(),
+        Ir::text("}}"),
+    ]))))
 }
 
-/// A `{{ ... }}` block: a `BLOCK_EXPR` whose only significant content is a
-/// single inner `BLOCK_EXPR` (plus braces / trivia / comments), matching
-/// [`try_format_curly_curly`]'s detection.
-fn is_curly_curly_block(node: &SyntaxNode) -> bool {
-    if node.kind() != SyntaxKind::BLOCK_EXPR {
-        return false;
+/// The single symbol of a curly-curly `{{ x }}` argument: an outer `BLOCK_EXPR`
+/// wrapping an inner `BLOCK_EXPR` whose only content is one identifier. Returns
+/// `None` for any other shape, matching the legacy renderer's symbol-only
+/// detection.
+fn curly_curly_inner_symbol(
+    significant: &[SyntaxElement<RLanguage>],
+) -> Option<SyntaxElement<RLanguage>> {
+    let [NodeOrToken::Node(outer)] = significant else {
+        return None;
+    };
+    if outer.kind() != SyntaxKind::BLOCK_EXPR {
+        return None;
     }
-    let mut inner_blocks = 0;
-    for el in node.children_with_tokens() {
-        match el {
-            NodeOrToken::Token(tok)
-                if matches!(
-                    tok.kind(),
-                    SyntaxKind::LBRACE
-                        | SyntaxKind::RBRACE
-                        | SyntaxKind::WHITESPACE
-                        | SyntaxKind::NEWLINE
-                        | SyntaxKind::COMMENT
-                ) => {}
-            NodeOrToken::Node(n) if n.kind() == SyntaxKind::BLOCK_EXPR => inner_blocks += 1,
-            _ => return false,
-        }
+    let outer_significant: Vec<_> = outer
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    let [
+        NodeOrToken::Token(outer_l),
+        NodeOrToken::Node(inner),
+        NodeOrToken::Token(outer_r),
+    ] = outer_significant.as_slice()
+    else {
+        return None;
+    };
+    if outer_l.kind() != SyntaxKind::LBRACE
+        || outer_r.kind() != SyntaxKind::RBRACE
+        || inner.kind() != SyntaxKind::BLOCK_EXPR
+    {
+        return None;
     }
-    inner_blocks == 1
+    let inner_significant: Vec<_> = inner
+        .children_with_tokens()
+        .filter(|el| !super::super::core::is_trivia(el.kind()))
+        .collect();
+    let [
+        NodeOrToken::Token(inner_l),
+        inner_expr @ NodeOrToken::Token(symbol),
+        NodeOrToken::Token(inner_r),
+    ] = inner_significant.as_slice()
+    else {
+        return None;
+    };
+    if inner_l.kind() == SyntaxKind::LBRACE
+        && inner_r.kind() == SyntaxKind::RBRACE
+        && symbol.kind() == SyntaxKind::IDENT
+    {
+        Some(inner_expr.clone())
+    } else {
+        None
+    }
 }
 
 /// Whether a call's sole argument is a lone positional expression that owns a
@@ -418,8 +462,8 @@ fn ir_call_argument(
         let value_node = single_node(&value_significant);
         let value_ir = if value_significant.is_empty() {
             None
-        } else if let Some(curly) = try_format_curly_curly(&value_significant, indent, ctx)? {
-            Some(Ir::verbatim(curly))
+        } else if let Some(curly) = ir_curly_curly(&value_significant, indent, ctx)? {
+            Some(curly)
         } else {
             Some(ir_expr_segment(
                 value_elements,
@@ -436,10 +480,10 @@ fn ir_call_argument(
     }
 
     let expr_node = single_node(significant);
-    // Curly-curly `{{ x }}` is bridged through the legacy renderer.
-    if let Some(curly) = try_format_curly_curly(significant, indent, ctx)? {
+    // Curly-curly `{{ x }}` renders natively as its own group.
+    if let Some(curly) = ir_curly_curly(significant, indent, ctx)? {
         return Ok(ArgSlot::Expr {
-            ir: Ir::verbatim(curly),
+            ir: curly,
             expr_node,
         });
     }
