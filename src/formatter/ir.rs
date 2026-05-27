@@ -7,8 +7,11 @@
 //! where each construct rendered directly to a `String` and width was measured
 //! retrospectively.
 
-// Builders are introduced ahead of their consumers during the incremental
-// migration to the IR; remove this allow in the final cleanup step.
+// The IR exposes a complete primitive vocabulary. A few builders
+// (`group_expanded`, `verbatim_forced`, `join`) are not yet exercised because
+// the heaviest arg-list constructs (subset/call/function) still use their
+// specialized string renderers; they are kept for the planned native IR
+// arg-wrapping work.
 #![allow(dead_code)]
 
 use std::rc::Rc;

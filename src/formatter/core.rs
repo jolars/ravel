@@ -5,14 +5,12 @@ use super::ir::Ir;
 use super::printer::Printer;
 use super::render::{format_atom_token, format_block_expr_with_prefixed_comments as render_block};
 use super::rules::control_flow::{
-    format_for_expr, format_if_expr, format_repeat_expr, format_while_expr, ir_for_expr,
-    ir_if_expr, ir_repeat_expr, ir_while_expr, should_insert_comment_for_gap,
+    ir_for_expr, ir_if_expr, ir_repeat_expr, ir_while_expr, should_insert_comment_for_gap,
     try_format_for_with_external_body, try_format_if_with_external_body,
     try_format_repeat_with_external_body, try_format_while_with_external_body,
 };
 use super::rules::expressions::{
-    format_assignment_expr, format_binary_expr, format_paren_expr, format_subset_expr,
-    format_unary_expr, ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_unary_expr,
+    format_subset_expr, ir_assignment_expr, ir_binary_expr, ir_paren_expr, ir_unary_expr,
 };
 use super::rules::functions::{format_call_expr, format_function_expr};
 use super::style::FormatStyle;
@@ -156,54 +154,6 @@ fn ir_root(root: &SyntaxNode, ctx: FormatContext) -> Result<Ir, FormatError> {
         idx += consumed + 1;
     }
     Ok(Ir::concat(items))
-}
-
-fn legacy_format_root(root: &SyntaxNode, ctx: FormatContext) -> Result<String, FormatError> {
-    let lines = split_lines(root.children_with_tokens().collect(), "root")?;
-    if lines.is_empty() {
-        return Ok(String::new());
-    }
-
-    let mut out = String::new();
-    let mut idx = 0usize;
-    while idx < lines.len() {
-        if idx > 0 {
-            out.push('\n');
-            if should_insert_comment_for_gap(&lines, idx, 0, ctx)? {
-                out.push('\n');
-            }
-        }
-        if let Some((formatted, consumed)) = try_format_for_with_external_body(&lines, idx, 0, ctx)?
-        {
-            out.push_str(&formatted);
-            idx += consumed + 1;
-            continue;
-        }
-        if let Some((formatted, consumed)) =
-            try_format_while_with_external_body(&lines, idx, 0, ctx)?
-        {
-            out.push_str(&formatted);
-            idx += consumed + 1;
-            continue;
-        }
-        if let Some((formatted, consumed)) = try_format_if_with_external_body(&lines, idx, 0, ctx)?
-        {
-            out.push_str(&formatted);
-            idx += consumed + 1;
-            continue;
-        }
-        if let Some((formatted, consumed)) =
-            try_format_repeat_with_external_body(&lines, idx, 0, ctx)?
-        {
-            out.push_str(&formatted);
-            idx += consumed + 1;
-            continue;
-        }
-
-        out.push_str(&format_line(&lines[idx], 0, ctx)?);
-        idx += 1;
-    }
-    Ok(out)
 }
 
 pub(super) fn format_line(
@@ -427,65 +377,6 @@ pub(super) fn ir_expr_with_optional_comment(
     }
 
     ir_expr_segment(elements, context, indent, ctx)
-}
-
-fn legacy_format_expr_node(
-    node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    if let Some(expr) = AssignmentExpr::cast(node.clone()) {
-        return format_assignment_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = UnaryExpr::cast(node.clone()) {
-        return format_unary_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = BinaryExpr::cast(node.clone()) {
-        return format_binary_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = ParenExpr::cast(node.clone()) {
-        return format_paren_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = CallExpr::cast(node.clone()) {
-        return format_call_expr(expr.syntax(), indent, ctx);
-    }
-    if matches!(
-        node.kind(),
-        SyntaxKind::SUBSET_EXPR | SyntaxKind::SUBSET2_EXPR
-    ) {
-        return format_subset_expr(node, indent, ctx);
-    }
-    if let Some(expr) = IfExpr::cast(node.clone()) {
-        return format_if_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = ForExpr::cast(node.clone()) {
-        return format_for_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = WhileExpr::cast(node.clone()) {
-        return format_while_expr(expr.syntax(), indent, ctx);
-    }
-    if node.kind() == SyntaxKind::REPEAT_EXPR {
-        return format_repeat_expr(node, indent, ctx);
-    }
-    if let Some(expr) = BlockExpr::cast(node.clone()) {
-        return format_block_expr(expr.syntax(), indent, ctx);
-    }
-    if let Some(expr) = FunctionExpr::cast(node.clone()) {
-        return format_function_expr(expr.syntax(), indent, ctx);
-    }
-
-    Err(FormatError::UnsupportedConstruct {
-        kind: node.kind(),
-        snippet: node.text().to_string(),
-    })
-}
-
-fn format_block_expr(
-    node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    format_block_expr_with_prefixed_comments(node, indent, ctx, &[])
 }
 
 pub(super) fn format_block_expr_with_prefixed_comments(

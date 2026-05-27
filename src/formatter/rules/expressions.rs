@@ -9,35 +9,7 @@ use super::super::ir::Ir;
 use super::super::trivia::split_lines;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
 
-pub(crate) fn format_unary_expr(
-    node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    let elements: Vec<_> = node.children_with_tokens().collect();
-    let op_idx = elements
-        .iter()
-        .position(|el| {
-            matches!(
-                el,
-                NodeOrToken::Token(tok)
-                    if matches!(tok.kind(), SyntaxKind::PLUS | SyntaxKind::MINUS | SyntaxKind::BANG)
-            )
-        })
-        .ok_or_else(|| FormatError::AmbiguousConstruct {
-            context: "unary operator not found",
-            snippet: node.text().to_string(),
-        })?;
-    let op = match &elements[op_idx] {
-        NodeOrToken::Token(tok) => tok.text().to_string(),
-        NodeOrToken::Node(_) => unreachable!(),
-    };
-    let rhs = format_expr_segment(&elements[op_idx + 1..], "unary operand", indent, ctx)?;
-    Ok(format!("{op}{rhs}"))
-}
-
-/// IR builder for unary expressions. Mirrors [`format_unary_expr`]: operator
-/// directly prefixed to the operand.
+/// IR builder for unary expressions: operator directly prefixed to the operand.
 pub(crate) fn ir_unary_expr(
     node: &SyntaxNode,
     indent: usize,
@@ -65,45 +37,9 @@ pub(crate) fn ir_unary_expr(
     Ok(Ir::concat([Ir::text(op), rhs]))
 }
 
-pub(crate) fn format_assignment_expr(
-    node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    let elements: Vec<_> = node.children_with_tokens().collect();
-    let op_idx = elements
-        .iter()
-        .position(|el| {
-            matches!(
-                el,
-                NodeOrToken::Token(tok)
-                    if matches!(
-                        tok.kind(),
-                        SyntaxKind::ASSIGN_LEFT
-                            | SyntaxKind::SUPER_ASSIGN
-                            | SyntaxKind::ASSIGN_RIGHT
-                            | SyntaxKind::SUPER_ASSIGN_RIGHT
-                            | SyntaxKind::ASSIGN_EQ
-                    )
-            )
-        })
-        .ok_or_else(|| FormatError::AmbiguousConstruct {
-            context: "assignment operator not found",
-            snippet: node.text().to_string(),
-        })?;
-
-    let op = match &elements[op_idx] {
-        NodeOrToken::Token(tok) => tok.text().to_string(),
-        NodeOrToken::Node(_) => unreachable!(),
-    };
-    let lhs = format_expr_segment(&elements[..op_idx], "assignment lhs", indent, ctx)?;
-    let rhs = format_expr_segment(&elements[op_idx + 1..], "assignment rhs", indent, ctx)?;
-    Ok(format!("{lhs} {op} {rhs}"))
-}
-
-/// IR builder for assignment. Mirrors [`format_assignment_expr`]: the operands
-/// are space-separated around the operator with no width-driven wrapping of its
-/// own (any wrapping comes from the operands' own IR).
+/// IR builder for assignment: the operands are space-separated around the
+/// operator with no width-driven wrapping of its own (any wrapping comes from
+/// the operands' own IR).
 pub(crate) fn ir_assignment_expr(
     node: &SyntaxNode,
     indent: usize,
@@ -244,101 +180,6 @@ fn ir_binary_side(
         return Ok(Ir::verbatim(curly_curly));
     }
     ir_expr_segment(elements, context, indent, ctx)
-}
-
-pub(crate) fn format_binary_expr(
-    node: &SyntaxNode,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    let elements: Vec<_> = node.children_with_tokens().collect();
-    let op_idx = elements
-        .iter()
-        .position(|el| {
-            matches!(
-                el,
-                NodeOrToken::Token(tok)
-                    if matches!(
-                        tok.kind(),
-                        SyntaxKind::PLUS
-                            | SyntaxKind::MINUS
-                            | SyntaxKind::STAR
-                            | SyntaxKind::SLASH
-                            | SyntaxKind::CARET
-                            | SyntaxKind::PIPE
-                            | SyntaxKind::COLON
-                            | SyntaxKind::OR
-                            | SyntaxKind::OR2
-                            | SyntaxKind::AND
-                            | SyntaxKind::AND2
-                            | SyntaxKind::EQUAL2
-                            | SyntaxKind::NOT_EQUAL
-                            | SyntaxKind::LESS_THAN
-                            | SyntaxKind::LESS_THAN_OR_EQUAL
-                            | SyntaxKind::GREATER_THAN
-                            | SyntaxKind::GREATER_THAN_OR_EQUAL
-                            | SyntaxKind::TILDE
-                            | SyntaxKind::USER_OP
-                            | SyntaxKind::COLON2
-                            | SyntaxKind::COLON3
-                            | SyntaxKind::DOLLAR
-                    )
-            )
-        })
-        .ok_or_else(|| FormatError::AmbiguousConstruct {
-            context: "binary operator not found",
-            snippet: node.text().to_string(),
-        })?;
-
-    let (op_kind, op_text) = match &elements[op_idx] {
-        NodeOrToken::Token(tok) => (tok.kind(), tok.text().to_string()),
-        NodeOrToken::Node(_) => unreachable!(),
-    };
-    let lhs = format_binary_side(&elements[..op_idx], "binary lhs", indent, ctx)?;
-    let rhs = format_binary_side(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
-    if op_kind == SyntaxKind::COLON2 || op_kind == SyntaxKind::COLON3 {
-        return Ok(format!("{lhs}{op_text}{rhs}"));
-    }
-    let (inline, multiline) = if op_kind == SyntaxKind::CARET
-        || op_kind == SyntaxKind::COLON
-        || op_kind == SyntaxKind::COLON2
-        || op_kind == SyntaxKind::COLON3
-        || op_kind == SyntaxKind::DOLLAR
-    {
-        (
-            format!("{lhs}{op_text}{rhs}"),
-            format!("{lhs}\n{}{}{rhs}", ctx.indent_text(indent + 1), op_text),
-        )
-    } else {
-        (
-            format!("{lhs} {op_text} {rhs}"),
-            format!("{lhs}\n{}{} {rhs}", ctx.indent_text(indent + 1), op_text),
-        )
-    };
-    if op_kind == SyntaxKind::PIPE || (op_kind == SyntaxKind::USER_OP && op_text == "%>%") {
-        return Ok(format!(
-            "{lhs} {op_text}\n{}{}",
-            ctx.indent_text(indent + 1),
-            rhs
-        ));
-    }
-    if ctx.fits_inline(indent, &inline) {
-        return Ok(inline);
-    }
-
-    Ok(multiline)
-}
-
-fn format_binary_side(
-    elements: &[SyntaxElement<RLanguage>],
-    context: &'static str,
-    indent: usize,
-    ctx: FormatContext,
-) -> Result<String, FormatError> {
-    if let Some(curly_curly) = try_format_curly_curly(elements, indent, ctx)? {
-        return Ok(curly_curly);
-    }
-    format_expr_segment(elements, context, indent, ctx)
 }
 
 fn try_format_curly_curly(
