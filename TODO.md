@@ -238,15 +238,27 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ### Formatter
 
-- [ ] **Native IR arg-wrapping for subset/call/function.** These are currently
-      bridged into the IR via `Verbatim` (Phase 5.3). Re-implement their
-      wrapping natively on the IR (group/soft-line based). This is a *deliberate
-      behavior change* (nicer wrapping), not behavior-preserving — review
-      snapshot diffs as intentional. The IR already reserves the needed
-      primitives (`group_expanded`, `if_break`, `verbatim_forced`, `join`).
-- [ ] Once arg-lists are native IR, retire the retained `fits_inline` /
-      `fits_with_newlines` width helpers (`src/formatter/context.rs`) and the
-      string-based loop-body / external-body helpers in `rules/`.
+- [x] **Native IR arg-wrapping for subset/call/function.** All three now build
+      their arg/param lists natively on the IR (group/soft-line based, with a
+      `group_hug` trailing-block primitive); the `Verbatim` bridge is gone for
+      the common cases. Came out byte-identical on every fixture; the one
+      intentional change is that a single-statement function body that is a
+      named call argument now flattens to a bare body, matching the flatten rule
+      already used elsewhere (`call_named_function_argument` guards it).
+- [ ] **Migrate the remaining legacy fallbacks to native IR.** `ir_call_expr`
+      and `ir_function_expr` still defer to the string renderers
+      (`format_call_expr` / `format_function_expr`) for arg/param lists carrying
+      comments (relocation unported), for curly-curly `{{ }}` args, and for
+      function defs that are call arguments. Porting comment relocation unblocks
+      removing these fallbacks — and lets call's trailing-function hug move onto
+      the `group_hug` primitive (it currently uses a build-time
+      `fits_with_newlines` check over the function's verbatim string).
+- [ ] Once those fallbacks are gone, retire the now-dead string renderers
+      (`format_call_expr`, `format_function_expr`, and their param/arg helpers)
+      and the retained `fits_inline` / `fits_with_newlines` width helpers
+      (`src/formatter/context.rs`) — the latter survive only for the
+      string-based control-flow loop-body / external-body helpers in `rules/`,
+      so they go when control flow is migrated.
 
 ## Phase 6: Linter and LSP integration (deferred)
 
