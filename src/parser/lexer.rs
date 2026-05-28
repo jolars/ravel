@@ -181,13 +181,23 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 i += 1;
             }
             '*' => {
-                out.push(Token {
-                    kind: TokKind::Star,
-                    text: "*".to_string(),
-                    start: i,
-                    end: i + 1,
-                });
-                i += 1;
+                if i + 1 < bytes.len() && (bytes[i + 1] as char) == '*' {
+                    out.push(Token {
+                        kind: TokKind::Caret,
+                        text: "**".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                } else {
+                    out.push(Token {
+                        kind: TokKind::Star,
+                        text: "*".to_string(),
+                        start: i,
+                        end: i + 1,
+                    });
+                    i += 1;
+                }
             }
             '^' => {
                 out.push(Token {
@@ -968,6 +978,25 @@ mod tests {
         assert_eq!(sig[1].text, "..1");
         assert_eq!(sig[2].kind, TokKind::Ident);
         assert_eq!(sig[2].text, "..123");
+    }
+
+    #[test]
+    fn lexes_double_star_as_single_caret_token() {
+        let tokens = lex("1**2 1 * *2");
+        let sig: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+        assert_eq!(sig[0].kind, TokKind::Int);
+        assert_eq!(sig[1].kind, TokKind::Caret);
+        assert_eq!(sig[1].text, "**");
+        assert_eq!(sig[2].kind, TokKind::Int);
+        assert_eq!(sig[3].kind, TokKind::Int);
+        assert_eq!(sig[4].kind, TokKind::Star);
+        assert_eq!(sig[4].text, "*");
+        assert_eq!(sig[5].kind, TokKind::Star);
+        assert_eq!(sig[5].text, "*");
+        assert_eq!(sig[6].kind, TokKind::Int);
     }
 
     #[test]

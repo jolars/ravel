@@ -8,9 +8,4 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         start: 30,
         end: 31,
     },
-    ParseDiagnostic {
-        message: "unexpected operator at expression start",
-        start: 148,
-        end: 149,
-    },
 ]

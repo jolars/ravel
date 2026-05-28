@@ -285,10 +285,6 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       consecutive `?`-headed lines are still merged across newlines and
       formatter idempotence is not guaranteed for them — same root cause as
       the unary `~` follow-up below.
-- [ ] **`**` exponentiation operator is unrecognized.** R accepts `**` as a
-      synonym for `^`; ravel lexes it as two `*` tokens and reports "unexpected
-      operator at expression start". Surfaced by the air
-      `binary_expression_sticky.R` port (excluded from the subset).
 - [ ] **Comments inside `if (...)` condition break parsing.**
       `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
       `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the

@@ -58,6 +58,7 @@ fn fixture_names() -> &'static [&'static str] {
         "assignment_missing_rhs_eq",
         "expr_precedence",
         "expr_right_assoc_power",
+        "expr_power_alias",
         "expr_paren_precedence",
         "assignment_expr_rhs",
         "assignment_chain_right_assoc",
