@@ -13,9 +13,4 @@ expression: "format!(\"{:#?}\", output.diagnostics)"
         start: 148,
         end: 149,
     },
-    ParseDiagnostic {
-        message: "expected right-hand side for binary operator",
-        start: 227,
-        end: 228,
-    },
 ]

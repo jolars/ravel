@@ -84,11 +84,11 @@ pub(crate) fn ir_assignment_expr(
 }
 
 /// IR builder for binary expressions. Mirrors [`format_binary_expr`]:
-/// - `::` / `:::` are sticky and never wrap;
+/// - `::` / `:::` / `^` / `:` / `$` are sticky and never wrap;
 /// - `|>` and `%>%` always break after the operator;
-/// - `^`, `:`, `$` render with no surrounding spaces;
-/// - everything else gets a space-separated group whose broken form leads the
-///   continuation line with the operator, indented one level.
+/// - everything else gets a space-separated group whose broken form keeps the
+///   operator on the prior line (R-valid continuation) and indents the right
+///   operand one level.
 pub(crate) fn ir_binary_expr(
     node: &SyntaxNode,
     indent: usize,
@@ -141,8 +141,15 @@ pub(crate) fn ir_binary_expr(
     let lhs = ir_binary_side(&elements[..op_idx], "binary lhs", indent, ctx)?;
     let rhs = ir_binary_side(&elements[op_idx + 1..], "binary rhs", indent, ctx)?;
 
-    // `::` / `:::` are sticky and never wrap.
-    if op_kind == SyntaxKind::COLON2 || op_kind == SyntaxKind::COLON3 {
+    // Sticky operators never wrap.
+    if matches!(
+        op_kind,
+        SyntaxKind::COLON2
+            | SyntaxKind::COLON3
+            | SyntaxKind::CARET
+            | SyntaxKind::COLON
+            | SyntaxKind::DOLLAR
+    ) {
         return Ok(Ir::concat([lhs, Ir::text(op_text), rhs]));
     }
 
@@ -157,21 +164,17 @@ pub(crate) fn ir_binary_expr(
         ]));
     }
 
-    // `^`, `:`, `$` render with no surrounding spaces.
-    let sticky = matches!(
-        op_kind,
-        SyntaxKind::CARET | SyntaxKind::COLON | SyntaxKind::DOLLAR
-    );
-    let (flat_op, broken_op) = if sticky {
-        (op_text.clone(), op_text.clone())
-    } else {
-        (format!(" {op_text} "), format!("{op_text} "))
-    };
+    // Non-sticky binary operators: when broken, the operator stays on the
+    // prior line so the continuation is R-valid (a leading operator on the
+    // next line would be parsed as a separate unary statement outside
+    // brackets). The right operand is indented one level.
+    let flat_op = format!(" {op_text} ");
+    let broken_lead = format!(" {op_text}");
     Ok(Ir::group(Ir::concat([
         lhs,
         Ir::if_break(
             Ir::text(flat_op),
-            Ir::indent(Ir::concat([Ir::hard_line(), Ir::text(broken_op)])),
+            Ir::concat([Ir::text(broken_lead), Ir::indent(Ir::hard_line())]),
         ),
         rhs,
     ])))

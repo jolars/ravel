@@ -39,13 +39,13 @@ ROOT@0..99
       INT@30..31 "2"
     NEWLINE@31..32 "\n"
     WHITESPACE@32..34 "  "
-    ERROR@34..38
+    BINARY_EXPR@34..43
       INT@34..35 "3"
       WHITESPACE@35..36 " "
       PLUS@36..37 "+"
       NEWLINE@37..38 "\n"
-    WHITESPACE@38..42 "    "
-    INT@42..43 "4"
+      WHITESPACE@38..42 "    "
+      INT@42..43 "4"
     NEWLINE@43..44 "\n"
     RBRACE@44..45 "}"
   NEWLINE@45..46 "\n"

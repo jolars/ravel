@@ -3,46 +3,47 @@ source: tests/parser_snapshots.rs
 expression: tree
 ---
 ROOT@0..71
-  BINARY_EXPR@0..11
-    BINARY_EXPR@0..8
-      BINARY_EXPR@0..5
-        UNARY_EXPR@0..2
-          PLUS@0..1 "+"
-          INT@1..2 "1"
-        NEWLINE@2..3 "\n"
-        MINUS@3..4 "-"
-        INT@4..5 "1"
-      NEWLINE@5..6 "\n"
-      TILDE@6..7 "~"
-      INT@7..8 "1"
-    NEWLINE@8..9 "\n"
+  UNARY_EXPR@0..2
+    PLUS@0..1 "+"
+    INT@1..2 "1"
+  NEWLINE@2..3 "\n"
+  UNARY_EXPR@3..5
+    MINUS@3..4 "-"
+    INT@4..5 "1"
+  NEWLINE@5..6 "\n"
+  UNARY_EXPR@6..8
+    TILDE@6..7 "~"
+    INT@7..8 "1"
+  NEWLINE@8..9 "\n"
+  UNARY_EXPR@9..11
     QUESTION@9..10 "?"
     INT@10..11 "1"
   NEWLINE@11..12 "\n"
-  ERROR@12..18
+  UNARY_EXPR@12..14
     BANG@12..13 "!"
     INT@13..14 "1"
-    NEWLINE@14..15 "\n"
-    NEWLINE@15..16 "\n"
+  NEWLINE@14..15 "\n"
+  NEWLINE@15..16 "\n"
+  UNARY_EXPR@16..19
     PLUS@16..17 "+"
     NEWLINE@17..18 "\n"
-  BINARY_EXPR@18..32
     INT@18..19 "1"
-    NEWLINE@19..20 "\n"
-    NEWLINE@20..21 "\n"
+  NEWLINE@19..20 "\n"
+  NEWLINE@20..21 "\n"
+  UNARY_EXPR@21..32
     PLUS@21..22 "+"
     WHITESPACE@22..23 " "
     COMMENT@23..32 "# Comment"
   NEWLINE@32..33 "\n"
-  ERROR@33..38
-    INT@33..34 "1"
-    NEWLINE@34..35 "\n"
-    NEWLINE@35..36 "\n"
+  INT@33..34 "1"
+  NEWLINE@34..35 "\n"
+  NEWLINE@35..36 "\n"
+  UNARY_EXPR@36..47
     PLUS@36..37 "+"
     NEWLINE@37..38 "\n"
-  BINARY_EXPR@38..59
     COMMENT@38..47 "# Comment"
-    NEWLINE@47..48 "\n"
+  NEWLINE@47..48 "\n"
+  UNARY_EXPR@48..59
     PLUS@48..49 "+"
     WHITESPACE@49..50 " "
     COMMENT@50..59 "# Comment"

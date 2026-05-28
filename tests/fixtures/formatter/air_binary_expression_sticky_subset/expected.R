@@ -6,18 +6,14 @@ a:::b
 1:2
 
 # The symbol is sticky to the operator, there is never a line break immediately after `$`
-argument_that_is_quite_quite_quite_quite_long
-  $argument_that_is_quite_quite_quite_long
+argument_that_is_quite_quite_quite_quite_long$argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long::argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long:::argument_that_is_quite_quite_quite_long
-argument_that_is_quite_quite_quite_quite_long
-  ^argument_that_is_quite_quite_quite_quite_long
-argument_that_is_quite_quite_quite_quite_long
-  :argument_that_is_quite_quite_quite_quite_long
+argument_that_is_quite_quite_quite_quite_long^argument_that_is_quite_quite_quite_quite_long
+argument_that_is_quite_quite_quite_quite_long:argument_that_is_quite_quite_quite_quite_long
 
 # If the RHS contains other complex expressions, they are allowed to break
-argument_that_is_quite_quite_quite_quite_long
-  $argument_that_is_quite_quite_quite_long(
+argument_that_is_quite_quite_quite_quite_long$argument_that_is_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 argument_that_is_quite_quite_quite_quite_long::argument_that_is_quite_quite_quite_long(
@@ -26,45 +22,37 @@ argument_that_is_quite_quite_quite_quite_long::argument_that_is_quite_quite_quit
 argument_that_is_quite_quite_quite_quite_long:::argument_that_is_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
-argument_that_is_quite_quite_quite_quite_long
-  ^argument_that_is_quite_quite_quite_quite_long(
+argument_that_is_quite_quite_quite_quite_long^argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
-argument_that_is_quite_quite_quite_quite_long
-  :argument_that_is_quite_quite_quite_quite_long(
+argument_that_is_quite_quite_quite_quite_long:argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 
 # `$` and regular binary operators are allowed complex expressions on their LHS
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  $argument_that_is_quite_quite_quite_long
+)$argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  ^argument_that_is_quite_quite_quite_quite_long
+)^argument_that_is_quite_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  :argument_that_is_quite_quite_quite_quite_long
+):argument_that_is_quite_quite_quite_quite_long
 
 # Chaining of method calls
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  $argument_that_is_quite_quite_quite_long(
+)$argument_that_is_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  ^argument_that_is_quite_quite_quite_quite_long(
+)^argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
-)
-  :argument_that_is_quite_quite_quite_quite_long(
+):argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )

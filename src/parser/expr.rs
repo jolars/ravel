@@ -23,10 +23,22 @@ fn is_infix_operator(kind: &TokKind) -> bool {
     infix_binding_power(kind).is_some()
 }
 
-fn next_operator<'a>(ctx: &ParserCtx<'a>, start: usize) -> Option<(usize, &'a Token)> {
+fn next_operator<'a>(
+    ctx: &ParserCtx<'a>,
+    start: usize,
+    inside_brackets: bool,
+) -> Option<(usize, &'a Token)> {
     let op_idx = ctx.skip_ws(start);
     let op = ctx.token(op_idx)?;
     if op.kind == TokKind::Newline {
+        // Outside brackets, a newline after a complete operand terminates the
+        // expression — R only continues across the newline if the prior line is
+        // incomplete (i.e. ended in an operator). Inside `(`, `[`, `[[` (and
+        // the conditions/sequences of `if`/`while`/`for`), newlines are not
+        // statement separators, so peek past them for a continuation operator.
+        if !inside_brackets {
+            return None;
+        }
         let next_idx = ctx.skip_ws_and_newlines(start);
         let next = ctx.token(next_idx)?;
         if is_assignment_operator(&next.kind) || is_infix_operator(&next.kind) {
@@ -46,7 +58,16 @@ pub(crate) fn parse_expr(
     min_bp: u8,
     diagnostics: &mut Vec<ParseDiagnostic>,
 ) -> Option<ExprParse> {
-    parse_expr_with_mode(tokens, start, min_bp, diagnostics, false)
+    parse_expr_with_mode(tokens, start, min_bp, diagnostics, false, false)
+}
+
+pub(crate) fn parse_expr_in_brackets(
+    tokens: &[Token],
+    start: usize,
+    min_bp: u8,
+    diagnostics: &mut Vec<ParseDiagnostic>,
+) -> Option<ExprParse> {
+    parse_expr_with_mode(tokens, start, min_bp, diagnostics, true, true)
 }
 
 fn parse_expr_with_mode(
@@ -55,6 +76,7 @@ fn parse_expr_with_mode(
     min_bp: u8,
     diagnostics: &mut Vec<ParseDiagnostic>,
     allow_newline_prefix: bool,
+    inside_brackets: bool,
 ) -> Option<ExprParse> {
     let ctx = ParserCtx::new(tokens);
     let start_non_ws = if allow_newline_prefix {
@@ -99,12 +121,18 @@ fn parse_expr_with_mode(
         return parse_function_expr(tokens, start_non_ws, diagnostics);
     }
 
-    let mut lhs = parse_prefix(&ctx, start, diagnostics, allow_newline_prefix)?;
+    let mut lhs = parse_prefix(
+        &ctx,
+        start,
+        diagnostics,
+        allow_newline_prefix,
+        inside_brackets,
+    )?;
 
     loop {
         lhs = parse_postfix_chain(&ctx, lhs, diagnostics);
 
-        let Some((op_idx, op)) = next_operator(&ctx, lhs.end) else {
+        let Some((op_idx, op)) = next_operator(&ctx, lhs.end, inside_brackets) else {
             break;
         };
 
@@ -115,9 +143,11 @@ fn parse_expr_with_mode(
             }
 
             let rhs_start = op_idx + 1;
-            let rhs_allow_newline = op.kind == TokKind::Pipe || op.kind == TokKind::UserOp;
+            // A pending operator means the line is incomplete, so newlines
+            // before the RHS operand are not statement terminators — R skips
+            // them when looking for the operand.
             let Some(rhs) =
-                parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, rhs_allow_newline)
+                parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, true, inside_brackets)
             else {
                 push_token_diagnostic(diagnostics, "expected assignment right-hand side", op);
                 return Some(error_expr_to_line_end(tokens, lhs.start, rhs_start));
@@ -135,9 +165,10 @@ fn parse_expr_with_mode(
         }
 
         let rhs_start = op_idx + 1;
-        let rhs_allow_newline = op.kind == TokKind::Pipe || op.kind == TokKind::UserOp;
+        // A pending operator means the line is incomplete, so newlines before
+        // the RHS operand are not statement terminators.
         let Some(rhs) =
-            parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, rhs_allow_newline)
+            parse_expr_with_mode(tokens, rhs_start, r_bp, diagnostics, true, inside_brackets)
         else {
             push_token_diagnostic(
                 diagnostics,
@@ -219,6 +250,7 @@ fn parse_prefix(
     start: usize,
     diagnostics: &mut Vec<ParseDiagnostic>,
     allow_newline_prefix: bool,
+    inside_brackets: bool,
 ) -> Option<ExprParse> {
     let tokens = ctx.tokens();
     let i = if allow_newline_prefix {
@@ -241,8 +273,14 @@ fn parse_prefix(
                 _ => 130,
             };
             let operand_start = i + 1;
-            let Some(operand) = parse_expr_with_mode(tokens, operand_start, rbp, diagnostics, true)
-            else {
+            let Some(operand) = parse_expr_with_mode(
+                tokens,
+                operand_start,
+                rbp,
+                diagnostics,
+                true,
+                inside_brackets,
+            ) else {
                 push_token_diagnostic(diagnostics, "expected operand for unary operator", tok);
                 return Some(error_expr_to_line_end(tokens, i, operand_start));
             };
@@ -280,7 +318,8 @@ fn parse_prefix(
             ) {
                 expr_start += 1;
             }
-            let Some(inner) = parse_expr_with_mode(tokens, expr_start, 0, diagnostics, true) else {
+            let Some(inner) = parse_expr_with_mode(tokens, expr_start, 0, diagnostics, true, true)
+            else {
                 push_token_diagnostic(diagnostics, "expected expression after '('", tok);
                 return Some(error_expr_to_line_end(tokens, i, inner_start));
             };
@@ -650,7 +689,7 @@ fn parse_call_expr(
                     events.push(Event::Tok(idx));
                 }
                 i = value_idx;
-            } else if let Some(val) = parse_expr(tokens, value_idx, 0, diagnostics) {
+            } else if let Some(val) = parse_expr_in_brackets(tokens, value_idx, 0, diagnostics) {
                 for idx in val_start..val.start {
                     events.push(Event::Tok(idx));
                 }
@@ -661,7 +700,7 @@ fn parse_call_expr(
             }
         } else {
             // Positional argument.
-            if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+            if let Some(arg) = parse_expr_in_brackets(tokens, i, 0, diagnostics) {
                 last_arg_was_comment_only = arg.end == arg.start + 1
                     && matches!(
                         tokens.get(arg.start).map(|t| &t.kind),
@@ -805,7 +844,7 @@ fn parse_bracket_expr(
         }
 
         events.push(Event::Start(SyntaxKind::ARG));
-        if let Some(arg) = parse_expr(tokens, i, 0, diagnostics) {
+        if let Some(arg) = parse_expr_in_brackets(tokens, i, 0, diagnostics) {
             last_arg_was_comment_only = arg.end == arg.start + 1
                 && matches!(
                     tokens.get(arg.start).map(|t| &t.kind),

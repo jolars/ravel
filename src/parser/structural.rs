@@ -2,7 +2,7 @@ use crate::parser::context::{ParserCtx, push_token_diagnostic_ctx as push_token_
 use crate::parser::cursor::find_function_body_recovery;
 use crate::parser::diagnostics::ParseDiagnostic;
 use crate::parser::events::{Event, ExprParse, push_range};
-use crate::parser::expr::parse_expr;
+use crate::parser::expr::{parse_expr, parse_expr_in_brackets};
 use crate::parser::lexer::{TokKind, Token};
 use crate::parser::recovery::push_empty_error_node;
 use crate::syntax::SyntaxKind;
@@ -56,7 +56,12 @@ pub(crate) fn parse_if_expr(
         cursor = cond_start;
     }
 
-    if let Some(cond) = parse_expr(tokens, cond_start, 0, diagnostics) {
+    let cond_parse = if saw_lparen {
+        parse_expr_in_brackets(tokens, cond_start, 0, diagnostics)
+    } else {
+        parse_expr(tokens, cond_start, 0, diagnostics)
+    };
+    if let Some(cond) = cond_parse {
         push_range(&mut events, cursor, cond.start);
         events.extend(cond.events);
         cursor = cond.end;
@@ -173,7 +178,12 @@ pub(crate) fn parse_while_expr(
         cursor = cond_start;
     }
 
-    if let Some(cond) = parse_expr(tokens, cond_start, 0, diagnostics) {
+    let cond_parse = if saw_lparen {
+        parse_expr_in_brackets(tokens, cond_start, 0, diagnostics)
+    } else {
+        parse_expr(tokens, cond_start, 0, diagnostics)
+    };
+    if let Some(cond) = cond_parse {
         push_range(&mut events, cursor, cond.start);
         events.extend(cond.events);
         cursor = cond.end;
@@ -317,7 +327,12 @@ pub(crate) fn parse_for_expr(
     }
 
     let seq_start = skip_for_clause_trivia(tokens, cursor);
-    if let Some(seq_expr) = parse_expr(tokens, seq_start, 0, diagnostics) {
+    let seq_parse = if saw_lparen {
+        parse_expr_in_brackets(tokens, seq_start, 0, diagnostics)
+    } else {
+        parse_expr(tokens, seq_start, 0, diagnostics)
+    };
+    if let Some(seq_expr) = seq_parse {
         push_range(&mut events, cursor, seq_expr.start);
         events.extend(seq_expr.events);
         cursor = seq_expr.end;

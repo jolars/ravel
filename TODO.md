@@ -289,14 +289,6 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       synonym for `^`; ravel lexes it as two `*` tokens and reports "unexpected
       operator at expression start". Surfaced by the air
       `binary_expression_sticky.R` port (excluded from the subset).
-- [ ] **Newline-continuation of binary `~` (and other infix ops) merges
-      separate top-level expressions.** `~foo\n~bar` parses as
-      `BINARY_EXPR{UNARY_EXPR{~foo}, ~, bar}` instead of two formulas; same
-      for `a + b\n+ c`. `next_operator` in `src/parser/expr.rs:26-41` skips a
-      newline whenever the following line starts with an infix operator, but R
-      only continues across a newline if the *prior* line is incomplete. Latent
-      before unary `~` was accepted; now affects formatter idempotence on
-      consecutive formula statements.
 - [ ] **Comments inside `if (...)` condition break parsing.**
       `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
       `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the
@@ -313,13 +305,6 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 - [ ] **`@` slot extraction is unsupported.** Parsing succeeds but formatting
       raises `UnsupportedConstruct { kind: AT }`. Surfaced by the air
       `binary_expression_sticky.R` port (excluded from the subset).
-- [ ] **"Sticky" binary operators sometimes break across lines.** Long
-      expressions joined by `$`, `^`, or `:` currently wrap with the operator
-      glued to the RHS instead of staying inline, e.g.
-      `argument_that_is_quite_quite_quite_quite_long\n  $argument_…`. `::` and
-      `:::` already stay glued. Locked in as the current baseline by the
-      `air_binary_expression_sticky_subset` port; tidyverse style and air keep
-      the symbol fully sticky.
 - [ ] **`} else` separated by blank line / comment inside `{ ... }` is
       rejected as ambiguous.** `if/else` shapes like
       `{\n  if (c) this\n  # comment\n  else that\n}` raise
