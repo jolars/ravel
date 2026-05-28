@@ -197,38 +197,37 @@ Done: implemented in `src/ast/nodes.rs` with tests in `tests/ast_wrappers.rs`.
             invariants in `tests/formatter.rs`. The seventh candidate
             `binary_expression.R` was dropped: ravel's parser emits 93
             diagnostics on the spec (`:=`, the `?`/`??`/`???` help-operator
-            family, and other infix shapes not yet supported); see "Known
-            issues / Parser" for the resulting follow-ups.
+            family, and other infix shapes not yet supported); see "Known issues
+            / Parser" for the resulting follow-ups.
       - [x] Phase B: ported 13 of the 16 candidate air formatter specs as
             `air_*` fixtures. All pass equality/parse/idempotence/
-            losslessness/snapshot invariants in `tests/formatter.rs`.
-            Four ports (`air_for_statement`, `air_keyword`,
-            `air_repeat_statement`, `air_while_statement`) match air
-            byte-for-byte. Eight ports (`air_braced_expressions`, `air_call`,
-            `air_dot_dot_i`, `air_function_definition`, `air_pipelines`,
-            `air_program`, `air_subset2`, `air_test_that`) intentionally
-            diverge: ravel's deterministic rule set drops persistent line
-            breaks, collapses blank lines between a comment and the next
-            statement, and does not name-special-case calls like `test_that`,
-            so each `expected.R` records ravel's actual rule-based output as
-            the locked regression baseline. The
-            `air_binary_expression_sticky_subset` port subsets the spec to
-            `$`/`::`/`:::`/`^`/`:`; ravel currently splits some "sticky" ops
-            across lines instead of keeping them glued (regression baseline
-            for a follow-up). Deferred (parser/formatter holes; not viable
-            even as subsets without more work): `binary_expression_sticky`
-            full (needs `?`, `**`, `@` --- the first two block parsing, the
-            third blocks formatting), `if_statement` (parser doesn't allow
-            comments between `if (` and `)`; formatter still rejects several
-            comment-bracketed `if ... else` shapes as ambiguous),
-            `subset` (parser fails on newline-between-args and on inner-
-            subset arg-list newlines when followed by certain trivia),
-            `unary_expression` (parser blocker resolved; formatter still
-            needs air's complex-vs-terminal-operand spacing rule for
-            unary `~` to match the spec byte-for-byte).
-            Permanently out of scope (incompatible with ravel's tenets or
-            missing features): the `persistent-line-breaks/`, `directives/`,
-            `skip/`, `table/`, `crlf/` subdirs and `call_table.R`.
+            losslessness/snapshot invariants in `tests/formatter.rs`. Four ports
+            (`air_for_statement`, `air_keyword`, `air_repeat_statement`,
+            `air_while_statement`) match air byte-for-byte. Eight ports
+            (`air_braced_expressions`, `air_call`, `air_dot_dot_i`,
+            `air_function_definition`, `air_pipelines`, `air_program`,
+            `air_subset2`, `air_test_that`) intentionally diverge: ravel's
+            deterministic rule set drops persistent line breaks, collapses blank
+            lines between a comment and the next statement, and does not
+            name-special-case calls like `test_that`, so each `expected.R`
+            records ravel's actual rule-based output as the locked regression
+            baseline. The `air_binary_expression_sticky_subset` port subsets the
+            spec to `$`/`::`/`:::`/`^`/`:`; ravel currently splits some "sticky"
+            ops across lines instead of keeping them glued (regression baseline
+            for a follow-up). Deferred (parser/formatter holes; not viable even
+            as subsets without more work): `binary_expression_sticky` full
+            (needs `?`, `**`, `@` --- the first two block parsing, the third
+            blocks formatting), `if_statement` (parser doesn't allow comments
+            between `if (` and `)`; formatter still rejects several
+            comment-bracketed `if ... else` shapes as ambiguous), `subset`
+            (parser fails on newline-between-args and on inner- subset arg-list
+            newlines when followed by certain trivia), `unary_expression`
+            (parser blocker resolved; formatter still needs air's
+            complex-vs-terminal-operand spacing rule for unary `~` to match the
+            spec byte-for-byte). Permanently out of scope (incompatible with
+            ravel's tenets or missing features): the `persistent-line-breaks/`,
+            `directives/`, `skip/`, `table/`, `crlf/` subdirs and
+            `call_table.R`.
 - [ ] Add migration/regression tests to ensure v2 changes remain predictable and
       safe.
 
@@ -274,7 +273,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `=`), producing `ASSIGNMENT_EXPR` with a `WALRUS` token. Fixture:
       `tests/fixtures/parser/expr_walrus`. Unblocks `air_binary_expression` for
       the formatter fixture batch.
-- [x] **Help operator `?` (with chained forms `??`, `???`, …).** `?` now
+- [x] **Help operator `?` (with chained forms `??`, `???`, ...).** `?` now
       parses as both unary (`?topic`) and binary (`pkg?topic`) at lowest
       precedence (binding power `(0, 1)`, below assignment so `x <- 1 ? 2`
       becomes `(x <- 1) ? 2`). There is no separate `??` token: chains like
@@ -283,17 +282,17 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `tests/fixtures/parser/expr_help_operator`. Note: the pre-existing
       `next_operator` newline-continuation bug also applies to `?`, so
       consecutive `?`-headed lines are still merged across newlines and
-      formatter idempotence is not guaranteed for them — same root cause as
+      formatter idempotence is not guaranteed for them --- same root cause as
       the unary `~` follow-up below.
 - [ ] **Comments inside `if (...)` condition break parsing.**
       `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
-      `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the
-      air `if_statement.R` port.
-- [x] **Newline between subset args breaks parsing in some contexts.**
-      Root cause: the lexer greedily merges `]]` into a single `RBrack2`, so
-      `df[df$col > 7, map[\n  names(df)\n]]` had the inner single-bracket
-      subset eat both `]`s and the outer `df[` ran off looking for a close ---
-      the "expected closing bracket" / "expected ',' between subset arguments"
+      `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the air
+      `if_statement.R` port.
+- [x] **Newline between subset args breaks parsing in some contexts.** Root
+      cause: the lexer greedily merges `]]` into a single `RBrack2`, so
+      `df[df$col > 7, map[\n  names(df)\n]]` had the inner single-bracket subset
+      eat both `]`s and the outer `df[` ran off looking for a close --- the
+      "expected closing bracket" / "expected ',' between subset arguments"
       errors were the cascade. Fixed by adding a token rebalancing pass
       (`src/parser/bracket_balancer.rs`) that re-groups runs of `]`s based on
       the open `[` / `[[` stack. Fixture:
@@ -301,27 +300,29 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ### Formatter
 
-- [x] **`@` slot extraction is unsupported.** Treat `@` like the other sticky
+- [x] **`@`slot extraction is unsupported.** Treat `@` like the other sticky
       binary operators (`$`, `::`, `:::`, `^`, `:`): never wrap, no spaces
       around. Added `SyntaxKind::AT` to both the operator-detection and
       sticky-operator sets in `ir_binary_expr`, dropped `AT` from
       `validate_supported_tokens`, and extended the
       `air_binary_expression_sticky_subset` fixture to cover `@` chains
       mirroring the existing `$` cases.
-- [x] **`} else` separated by blank line / comment inside `{ ... }` is
-      rejected as ambiguous.** Two root causes in the if/else renderer. (1)
+
+- [x] **`} else`separated by blank line / comment inside `{ ... }` is rejected
+      as ambiguous.** Two root causes in the if/else renderer. (1)
       `prepend_comments_to_branch` stripped the closing brace with the literal
-      suffix `"\n}"`, which only matches at indent=0 — when the if-else was
+      suffix `"\n}"`, which only matches at indent=0 --- when the if-else was
       nested, the suffix mismatched and the fallback re-wrapped an already-block
       `else` branch, producing weird double `{...}` nesting (and stale
       `else_is_block`, which then triggered another auto-brace pass). (2)
-      `format_if_then_branch_with_comments` only extracted interstitial
-      comments when the then-body was a block, so a bare-body `if (a) 1\n#
-      c\nelse 2` either let the comment swallow `else` (same-line trailing) or
-      let it inline as a trailing comment on `1`. Fix: make `prepend` indent-
-      aware, mark `else` as a block after a successful prepend, and for the
-      bare-body case auto-brace whenever a comment sits between the body and
-      `else` (so the comment never crosses the `else` boundary). Fixtures:
+      `format_if_then_branch_with_comments` only extracted interstitial comments
+      when the then-body was a block, so a bare-body
+      `if (a) 1\n#       c\nelse 2` either let the comment swallow `else`
+      (same-line trailing) or let it inline as a trailing comment on `1`. Fix:
+      make `prepend` indent- aware, mark `else` as a block after a successful
+      prepend, and for the bare-body case auto-brace whenever a comment sits
+      between the body and `else` (so the comment never crosses the `else`
+      boundary). Fixtures:
       `tests/fixtures/formatter/if_else_interstitial_comment_{block,bare}`,
       `if_else_trailing_comment_after_{block,bare}`.
 
@@ -332,6 +333,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       intentional change is that a single-statement function body that is a
       named call argument now flattens to a bare body, matching the flatten rule
       already used elsewhere (`call_named_function_argument` guards it).
+
 - [x] **Function-definition call args + trailing-function hug → native IR.**
       `ir_call_expr` no longer defers to the legacy renderer for natively
       renderable function args: a sole function arg hugs the parens
@@ -346,6 +348,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       trailing function's params must break now expands one arg per line instead
       of hugging `callee(x, function(` --- ravel's single-pass printer cannot
       reproduce the legacy two-phase "format the function, then measure" hug.
+
 - [x] **Curly-curly `{{ }}` call args → native IR.** Dropped the curly-curly
       check from `call_needs_legacy`; `ir_call_argument` now builds `{{ x }}`
       natively via `ir_curly_curly` (flat `{{ x }}`, or a group the printer
@@ -354,6 +357,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       mis-indented multi-line `{{ <long symbol> }}` case the verbatim bridge got
       wrong. Commented curly-curly forms still route to legacy via the comment
       gate (folds into comment relocation below).
+
 - [x] **Native IR comment relocation for call/param arg lists.** Comments no
       longer force the legacy renderer: the
       `descendants_with_tokens().any(COMMENT)` gate is gone from both calls and
@@ -387,6 +391,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       forced break (control flow). The rare `ASSIGNMENT_EXPR`-arg-with-comment
       shape (not producible from diagnostic-free input) is kept on legacy via
       `call_comment_path_unsupported`.
+
 - [x] **Function-definition-as-argument → native IR.** Dropped the
       `call_has_legacy_function` gate from `ir_call_expr`; a function arg with a
       brace-token default or a bare body embedding a block no longer routes its
@@ -401,6 +406,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `bare_body_embeds_block`, `arg_function_node`. Byte-identical across the
       air corpus + repo fixtures; idempotent (modulo the pre-existing
       `air_ok_for_statement` `for`-quirk).
+
 - [x] **Retire the dead `format_call_expr` / `format_function_expr` string
       renderers and their \~30 param/arg helpers.** Migrated the three remaining
       gates that kept them alive: brace-token param defaults (now a
@@ -419,6 +425,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       migration. Byte-identical across the air corpus + repo fixtures; a new
       `function_bare_control_flow_body` fixture exercises bare `if`/`for`/
       `while`/`repeat` bodies plus a long-param auto-bracing case.
+
 - [x] **Lift the single-pass printer limit (conditional-group / candidate
       layouts).** Added `Ir::ConditionalGroup(Rc<[Ir]>)` plus a break-aware
       `first_line_fits` measurement to the printer: the printer picks the first
