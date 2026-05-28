@@ -249,8 +249,11 @@ impl Printer {
     /// `fits` exactly as the real printer does — and treats the first
     /// newline that would actually be emitted (a `HardLine`/`EmptyLine`, a
     /// `Line`/`SoftLine` in `Break` mode, or anything in a nested group
-    /// decided `Break`) as success. A forced-break `Verbatim` fails, since
-    /// the candidate cannot be rendered flat at all.
+    /// decided `Break`) as success. A *single-line* forced-break `Verbatim`
+    /// (e.g. a standalone comment) fails, since it can't be rendered flat;
+    /// a *multi-line* `Verbatim` (e.g. a function arg fallback-rendered as
+    /// a multi-line legacy chunk) measures only its first line — its own
+    /// embedded newline counts as the success signal.
     fn first_line_fits(&self, start_col: usize, node: &Ir) -> bool {
         let mut col = start_col;
         let mut stack: Vec<(Mode, &Ir)> = vec![(Mode::Flat, node)];
@@ -264,6 +267,13 @@ impl Printer {
                     }
                 }
                 Ir::Verbatim { text, force_break } => {
+                    if let Some(first_line) = text.split_once('\n').map(|(l, _)| l) {
+                        col += first_line.chars().count();
+                        if col > self.line_width {
+                            return false;
+                        }
+                        return true;
+                    }
                     if *force_break {
                         return false;
                     }

@@ -114,7 +114,7 @@ pub(crate) fn ir_call_expr(
             snippet: node.text().to_string(),
         })?;
 
-    if call_has_legacy_function(&arg_list) || call_comment_path_unsupported(&arg_list) {
+    if call_comment_path_unsupported(&arg_list) {
         return Ok(Ir::verbatim(format_call_expr(node, indent, ctx)?));
     }
 
@@ -196,17 +196,6 @@ fn arg_is_named_function(arg: &SyntaxNode) -> bool {
                         if tok.kind() == SyntaxKind::FUNCTION_KW && tok.text() == "function")
                 })
         })
-}
-
-/// Whether the call has a function-definition argument that itself renders via
-/// the legacy string path (see [`function_expr_needs_legacy`]), forcing the whole
-/// call onto the legacy renderer. Natively-rendered function args flow through
-/// `ir_call_expr`'s recursion and the trailing-block hug.
-fn call_has_legacy_function(arg_list: &SyntaxNode) -> bool {
-    arg_list
-        .children()
-        .filter(|n| n.kind() == SyntaxKind::ARG)
-        .any(|arg| arg_is_legacy_function(&arg))
 }
 
 /// The one comment shape the native comment layout does not reproduce: an
@@ -343,51 +332,6 @@ fn is_curly_curly_symbol_block(outer: &SyntaxNode) -> bool {
         .filter(|el| !matches!(el, NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT))
         .collect();
     matches!(exprs.as_slice(), [NodeOrToken::Token(tok)] if tok.kind() == SyntaxKind::IDENT)
-}
-
-/// The function-definition node of a direct argument, if any: a bare
-/// `function(...)` arg or the value of a named `f = function(...)` arg.
-fn arg_function_node(arg: &SyntaxNode) -> Option<SyntaxNode> {
-    arg.children()
-        .find(|n| n.kind() == SyntaxKind::FUNCTION_EXPR)
-}
-
-/// A function-definition argument that `ir_function_expr` would render as a
-/// `Verbatim` blob, so the whole call stays on the legacy renderer.
-fn arg_is_legacy_function(arg: &SyntaxNode) -> bool {
-    arg_function_node(arg).is_some_and(|f| function_expr_needs_legacy(&f))
-}
-
-/// Whether a function-definition node *used as a call argument* falls back to the
-/// legacy string renderer, keeping the whole call on legacy. A direct comment or
-/// brace-token default (`a = { ... }`), or a bare body that embeds a block.
-///
-/// Note: `ir_function_expr` now relocates head/param/body comments natively, so a
-/// stand-alone commented function definition no longer needs legacy. But a
-/// *commented* function definition nested as a call argument is still routed here
-/// to legacy: the legacy call renderer's handling of such args differs from the
-/// native trailing-function path, and untangling that belongs with the
-/// function-as-argument migration, not comment relocation. Keeping the `COMMENT`
-/// check preserves byte-identical output for those cases.
-fn function_expr_needs_legacy(fn_node: &SyntaxNode) -> bool {
-    let direct_token_legacy = fn_node.children_with_tokens().any(|el| {
-        matches!(el, NodeOrToken::Token(tok)
-            if matches!(tok.kind(), SyntaxKind::COMMENT | SyntaxKind::LBRACE))
-    });
-    direct_token_legacy || bare_body_embeds_block(fn_node)
-}
-
-/// A function whose body is not itself a block but contains one (e.g.
-/// `function() if (x) { ... }`): its bare body carries a forced break, which
-/// `ir_function_expr` routes to the legacy renderer.
-fn bare_body_embeds_block(fn_node: &SyntaxNode) -> bool {
-    // Param defaults are raw tokens, so the only child node is the body.
-    match fn_node.children().last() {
-        Some(body) if body.kind() != SyntaxKind::BLOCK_EXPR => body
-            .descendants()
-            .any(|d| d.kind() == SyntaxKind::BLOCK_EXPR),
-        _ => false,
-    }
 }
 
 /// A *positional* function-definition argument (`function(...) ...` or
