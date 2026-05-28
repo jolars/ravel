@@ -74,6 +74,7 @@ pub enum SyntaxKind {
     ARG_LIST,
     ARG,
     ERROR,
+    COMPLEX,
 }
 
 impl From<SyntaxKind> for rowan::SyntaxKind {
@@ -160,6 +161,7 @@ impl Language for RLanguage {
             67 => SyntaxKind::ARG_LIST,
             68 => SyntaxKind::ARG,
             69 => SyntaxKind::ERROR,
+            70 => SyntaxKind::COMPLEX,
             _ => SyntaxKind::ERROR,
         }
     }

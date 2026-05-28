@@ -3,15 +3,11 @@ source: tests/parser_snapshots.rs
 expression: tree
 ---
 ROOT@0..21
-  INT@0..1 "1"
-  IDENT@1..2 "i"
+  COMPLEX@0..2 "1i"
   NEWLINE@2..3 "\n"
-  FLOAT@3..6 "2.5"
-  IDENT@6..7 "i"
+  COMPLEX@3..7 "2.5i"
   NEWLINE@7..8 "\n"
-  FLOAT@8..11 "1e6"
-  IDENT@11..12 "i"
+  COMPLEX@8..12 "1e6i"
   NEWLINE@12..13 "\n"
-  FLOAT@13..19 "0x123F"
-  IDENT@19..20 "i"
+  COMPLEX@13..20 "0x123Fi"
   NEWLINE@20..21 "\n"

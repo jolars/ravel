@@ -269,12 +269,6 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ### Parser
 
-- [ ] **Complex literals are mis-lexed.** The imaginary suffix `i` is not
-      recognized, so `1i`, `2.5i`, `1e6i`, `0x123Fi` lex as a numeric token
-      followed by `IDENT "i"` instead of a single imaginary literal. Fix the
-      lexer (`src/parser/lexer.rs`) to consume a trailing `i` on numeric
-      literals, add a dedicated token/`SyntaxKind` if warranted, and refresh the
-      `air_ok_value_complex_value` snapshot.
 - [ ] **Walrus assignment `:=` is unrecognized.** The token isn't lexed/parsed
       as an assignment operator; `1 := 2` produces "expected right-hand side
       for binary operator". Surfaced by the air `binary_expression.R` formatter

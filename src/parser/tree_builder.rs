@@ -26,6 +26,7 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::Ident => SyntaxKind::IDENT,
         TokKind::Int => SyntaxKind::INT,
         TokKind::Float => SyntaxKind::FLOAT,
+        TokKind::Complex => SyntaxKind::COMPLEX,
         TokKind::String => SyntaxKind::STRING,
         TokKind::Comment => SyntaxKind::COMMENT,
         TokKind::Tilde => SyntaxKind::TILDE,

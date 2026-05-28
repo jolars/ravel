@@ -186,6 +186,7 @@ pub(super) fn format_atom_token(token: &SyntaxToken<RLanguage>) -> Result<String
         SyntaxKind::IDENT
         | SyntaxKind::INT
         | SyntaxKind::FLOAT
+        | SyntaxKind::COMPLEX
         | SyntaxKind::STRING
         | SyntaxKind::BANG => Ok(token.text().to_string()),
         kind => Err(FormatError::UnsupportedConstruct {

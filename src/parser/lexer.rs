@@ -3,6 +3,7 @@ pub(crate) enum TokKind {
     Ident,
     Int,
     Float,
+    Complex,
     String,
     Comment,
     IfKw,
@@ -670,13 +671,19 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                             }
                         }
 
+                        let mut is_complex = false;
                         if i < bytes.len() && matches!(bytes[i] as char, 'L' | 'l') {
                             force_int = true;
+                            i += 1;
+                        } else if i < bytes.len() && (bytes[i] as char) == 'i' {
+                            is_complex = true;
                             i += 1;
                         }
 
                         out.push(Token {
-                            kind: if force_int {
+                            kind: if is_complex {
+                                TokKind::Complex
+                            } else if force_int {
                                 TokKind::Int
                             } else {
                                 // R hex numeric constants are doubles unless integer-suffixed.
@@ -723,13 +730,19 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                             }
                         }
 
+                        let mut is_complex = false;
                         if i < bytes.len() && matches!(bytes[i] as char, 'L' | 'l') {
                             force_int = true;
+                            i += 1;
+                        } else if i < bytes.len() && (bytes[i] as char) == 'i' {
+                            is_complex = true;
                             i += 1;
                         }
 
                         out.push(Token {
-                            kind: if force_int {
+                            kind: if is_complex {
+                                TokKind::Complex
+                            } else if force_int {
                                 TokKind::Int
                             } else if is_float {
                                 TokKind::Float
@@ -898,6 +911,24 @@ mod tests {
         assert_eq!(number_tokens[1].text, "1e5L");
         assert_eq!(number_tokens[2].text, "0x123L");
         assert_eq!(number_tokens[3].text, "0x0p+10L");
+    }
+
+    #[test]
+    fn lexes_imaginary_suffix_literals_as_single_complex_tokens() {
+        let tokens = lex("1i 2.5i 1e6i 0x123Fi");
+        let number_tokens: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokKind::Whitespace))
+            .collect();
+
+        assert_eq!(number_tokens.len(), 4);
+        for tok in &number_tokens {
+            assert_eq!(tok.kind, TokKind::Complex);
+        }
+        assert_eq!(number_tokens[0].text, "1i");
+        assert_eq!(number_tokens[1].text, "2.5i");
+        assert_eq!(number_tokens[2].text, "1e6i");
+        assert_eq!(number_tokens[3].text, "0x123Fi");
     }
 
     #[test]

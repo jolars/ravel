@@ -173,7 +173,7 @@ fn parse_expr_with_mode(
         if matches!(op.kind, TokKind::Colon2 | TokKind::Colon3)
             && matches!(
                 expr_root_kind(&rhs),
-                Some(SyntaxKind::INT | SyntaxKind::FLOAT)
+                Some(SyntaxKind::INT | SyntaxKind::FLOAT | SyntaxKind::COMPLEX)
             )
         {
             push_token_diagnostic(
@@ -262,6 +262,7 @@ fn parse_prefix(
         TokKind::Ident
         | TokKind::Int
         | TokKind::Float
+        | TokKind::Complex
         | TokKind::String
         | TokKind::Comment
         | TokKind::UserOp => Some(ExprParse {
