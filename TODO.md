@@ -311,14 +311,25 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `bare_body_embeds_block`, `arg_function_node`. Byte-identical across the
       air corpus + repo fixtures; idempotent (modulo the pre-existing
       `air_ok_for_statement` `for`-quirk).
-- [ ] Retire the now-dead string renderers (`format_call_expr`,
-      `format_function_expr`, and their param/arg helpers) and the retained
-      `fits_inline` / `fits_with_newlines` width helpers (`src/formatter/context.rs`).
-      Three call sites still keep them alive: `call_comment_path_unsupported`
-      (an `ASSIGNMENT_EXPR`-arg-with-comment edge case, not producible from
-      diagnostic-free input), `function_has_brace_default` (brace-token param
-      defaults), and the `body_ir.contains_forced_break()` fallback (bare
-      control-flow body). They go once those three paths are migrated.
+- [x] **Retire the dead `format_call_expr` / `format_function_expr` string
+      renderers and their ~30 param/arg helpers.** Migrated the three remaining
+      gates that kept them alive: brace-token param defaults (now a
+      `Verbatim`-bridged native path in `ir_function_param_default` /
+      `ir_brace_token_default`, with a nested-block heuristic that mirrors
+      legacy's `param.contains("= {\n  {\n")` to force-break the params
+      list); `call_comment_path_unsupported` (gate dropped — the shape isn't
+      producible from diagnostic-free input); and the
+      `body_ir.contains_forced_break()` fallback (replaced by
+      `Ir::ConditionalGroupAllLines` + `Printer::all_lines_fit`, the IR port
+      of `fits_with_newlines`). The bare-body branch now builds two body
+      IRs (one at `indent`, one at `indent + 1`) so a verbatim-bridged
+      control-flow body lines up correctly when the body is wrapped in
+      braces. Also dropped `fits_with_newlines` from `context.rs`;
+      `fits_inline` keeps one remaining caller (`format_while_header` in
+      `control_flow.rs`) and stays for a later migration. Byte-identical
+      across the air corpus + repo fixtures; a new
+      `function_bare_control_flow_body` fixture exercises bare `if`/`for`/
+      `while`/`repeat` bodies plus a long-param auto-bracing case.
 - [x] **Lift the single-pass printer limit (conditional-group / candidate
       layouts).** Added `Ir::ConditionalGroup(Rc<[Ir]>)` plus a break-aware
       `first_line_fits` measurement to the printer: the printer picks the
