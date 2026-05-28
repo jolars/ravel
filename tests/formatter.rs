@@ -78,6 +78,7 @@ fn fixture_names() -> &'static [&'static str] {
         "function_definition_comments",
         "function_definition_user_requested_line_break",
         "function_definition_user_requested_line_break_followup",
+        "function_bare_control_flow_body",
         "subset_basic_and_holes",
         "subset_holes_trailing_function",
         "subset_dots_and_dotdoti",

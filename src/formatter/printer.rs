@@ -114,9 +114,13 @@ impl Printer {
     }
 
     fn run(&self, ir: &Ir, base_indent: usize, init_col: usize) -> String {
+        self.run_with_mode(ir, base_indent, init_col, Mode::Break)
+    }
+
+    fn run_with_mode(&self, ir: &Ir, base_indent: usize, init_col: usize, mode: Mode) -> String {
         let mut w = Writer::new();
         w.col = init_col;
-        let mut stack: Vec<(usize, Mode, &Ir)> = vec![(base_indent, Mode::Break, ir)];
+        let mut stack: Vec<(usize, Mode, &Ir)> = vec![(base_indent, mode, ir)];
         while let Some((indent, mode, node)) = stack.pop() {
             match node {
                 Ir::Nil => {}
@@ -157,6 +161,10 @@ impl Printer {
                     let (m, chosen) = self.pick_candidate(w.col, cands);
                     stack.push((indent, m, chosen));
                 }
+                Ir::ConditionalGroupAllLines(cands) => {
+                    let (m, chosen) = self.pick_candidate_all_lines(w.col, indent, cands);
+                    stack.push((indent, m, chosen));
+                }
             }
         }
         w.out
@@ -177,6 +185,51 @@ impl Printer {
             }
         }
         unreachable!("Ir::ConditionalGroup builder rejects empty candidate lists")
+    }
+
+    /// Pick the layout for an [`Ir::ConditionalGroupAllLines`]: the first
+    /// candidate every one of whose rendered lines fits within `line_width`
+    /// is rendered flat; if none qualifies the last candidate is rendered
+    /// broken. The IR-native equivalent of the legacy `fits_with_newlines`
+    /// check.
+    fn pick_candidate_all_lines<'a>(
+        &self,
+        col: usize,
+        indent: usize,
+        cands: &'a [Ir],
+    ) -> (Mode, &'a Ir) {
+        let n = cands.len();
+        for (i, c) in cands.iter().enumerate() {
+            if self.all_lines_fit(col, indent, c) {
+                return (Mode::Flat, c);
+            }
+            if i + 1 == n {
+                return (Mode::Break, c);
+            }
+        }
+        unreachable!("Ir::ConditionalGroupAllLines builder rejects empty candidate lists")
+    }
+
+    /// Whether every line `node` would render to fits within `line_width`,
+    /// when placed at column `start_col` under the active `indent` in Flat
+    /// mode (the mode the chosen candidate would be rendered in). Used by
+    /// [`Self::pick_candidate_all_lines`]. Renders the candidate via the
+    /// same printer machinery (so nested group decisions match the real
+    /// render), then walks the output lines.
+    fn all_lines_fit(&self, start_col: usize, indent: usize, node: &Ir) -> bool {
+        let rendered = self.run_with_mode(node, indent, start_col, Mode::Flat);
+        let mut lines = rendered.split('\n');
+        if let Some(first) = lines.next()
+            && start_col + first.chars().count() > self.line_width
+        {
+            return false;
+        }
+        for line in lines {
+            if line.chars().count() > self.line_width {
+                return false;
+            }
+        }
+        true
     }
 
     /// Simulate `node` flat, starting at column `start_col`. Returns false on the
@@ -242,7 +295,7 @@ impl Printer {
                 // conditional group inside a flat measurement is rare today
                 // (the only producer is the trailing-function call hug); if
                 // and when one nests, this matches the most permissive layout.
-                Ir::ConditionalGroup(cands) => {
+                Ir::ConditionalGroup(cands) | Ir::ConditionalGroupAllLines(cands) => {
                     if let Some(first) = cands.first() {
                         stack.push(first);
                     }
@@ -324,7 +377,7 @@ impl Printer {
                     };
                     stack.push((m, inner));
                 }
-                Ir::ConditionalGroup(cands) => {
+                Ir::ConditionalGroup(cands) | Ir::ConditionalGroupAllLines(cands) => {
                     let (m, chosen) = self.pick_candidate(col, cands);
                     stack.push((m, chosen));
                 }

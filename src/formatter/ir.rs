@@ -65,6 +65,14 @@ pub(crate) enum Ir {
     /// "break-aware group": flat if its first line fits, broken otherwise.
     /// Must contain at least one candidate.
     ConditionalGroup(Rc<[Ir]>),
+    /// Same shape as [`Ir::ConditionalGroup`] but selected by an *all-lines*
+    /// measurement: the printer renders each candidate at the current column
+    /// and picks the first whose every rendered line fits within
+    /// `line_width`. The last candidate is rendered broken when none fit.
+    /// Use for choices like "keep this body bare if every rendered line fits,
+    /// else wrap in braces" — the IR port of the legacy `fits_with_newlines`
+    /// check.
+    ConditionalGroupAllLines(Rc<[Ir]>),
     /// Nothing.
     Nil,
 }
@@ -136,6 +144,17 @@ impl Ir {
         Ir::ConditionalGroup(cands.into())
     }
 
+    /// An ordered list of candidate layouts selected by all-lines-fit; see
+    /// [`Ir::ConditionalGroupAllLines`]. Panics if `candidates` is empty.
+    pub(crate) fn conditional_group_all_lines(candidates: impl IntoIterator<Item = Ir>) -> Ir {
+        let cands: Vec<Ir> = candidates.into_iter().collect();
+        assert!(
+            !cands.is_empty(),
+            "Ir::conditional_group_all_lines requires at least one candidate"
+        );
+        Ir::ConditionalGroupAllLines(cands.into())
+    }
+
     pub(crate) fn indent(inner: Ir) -> Ir {
         Ir::Indent(Rc::new(inner))
     }
@@ -199,7 +218,9 @@ impl Ir {
             Ir::Group { inner, expand, .. } => *expand || inner.contains_forced_break(),
             // The flat-most candidate decides: if even it forces a break, the
             // conditional group always breaks; otherwise some layout is flat-able.
-            Ir::ConditionalGroup(cands) => cands.first().is_some_and(Ir::contains_forced_break),
+            Ir::ConditionalGroup(cands) | Ir::ConditionalGroupAllLines(cands) => {
+                cands.first().is_some_and(Ir::contains_forced_break)
+            }
             Ir::Text(_) | Ir::Line | Ir::SoftLine | Ir::IfBreak { .. } | Ir::Nil => false,
         }
     }

@@ -2240,36 +2240,48 @@ pub(crate) fn ir_function_expr(
         let block_ir =
             ir_block_expr_with_prefixed_comments(block, indent, ctx, &body_leading_comments)?;
         // A flattenable block (`function(p) { stmt }` → `function(p) stmt`) only
-        // applies with no comments forcing the layout open.
+        // applies with no comments forcing the layout open *and* when the
+        // single statement renders flat — a multi-line inner statement (a
+        // nested block, an `if` with braced arms) keeps the outer braces, so
+        // the user sees the structure they wrote.
         if !param_has_comment
             && body_leading_comments.is_empty()
             && let Some(stmt_ir) = try_flatten_function_block(block, indent, ctx)?
+            && !stmt_ir.contains_forced_break()
         {
             function_body_choice(head_ir, params_ir, stmt_ir, block_ir)
         } else {
             function_braced_hug(head_ir, params_ir, block_ir)
         }
     } else {
-        // Bare (non-block) body. A body whose IR carries a forced break (e.g. an
-        // `if` with braced arms) is kept bare and multi-line by the legacy
-        // renderer when each line fits; defer to it (it relocates the comments too)
-        // rather than force-bracing the body.
-        let body_ir = ir_expr_segment(&body_core, "function body", indent, ctx)?;
-        if body_ir.contains_forced_break() {
-            return Ok(Ir::verbatim(format_function_expr(node, indent, ctx)?));
-        }
+        // Bare (non-block) body. The bare and braced layouts render the body
+        // at different indents (bare at the function-expr's own indent, braced
+        // at +1 inside the wrapping `{ … }`), so build a separate IR for each.
+        // Native IR builders are insensitive to the build-time `indent`
+        // parameter (they use `Ir::Indent` for layout), but legacy bridges
+        // like `ir_if_expr` bake the indent into a `Verbatim` — re-rendering
+        // at `indent + 1` is what lines the verbatim's content up correctly
+        // when wrapped in braces. The bare/braced choice itself routes
+        // through `function_body_choice`, which now measures all lines for
+        // forced-break bodies (the IR port of legacy `fits_with_newlines`).
+        let bare_body_ir = ir_expr_segment(&body_core, "function body", indent, ctx)?;
+        let braced_body_ir = if bare_body_ir.contains_forced_break() {
+            ir_expr_segment(&body_core, "function body", indent + 1, ctx)?
+        } else {
+            bare_body_ir.clone()
+        };
         if !param_has_comment && body_leading_comments.is_empty() {
             function_body_choice(
                 head_ir,
                 params_ir,
-                body_ir.clone(),
-                brace_wrap_body(body_ir),
+                bare_body_ir,
+                brace_wrap_body(braced_body_ir),
             )
         } else {
             function_braced_hug(
                 head_ir,
                 params_ir,
-                brace_wrap_body_with_comments(body_ir, &body_leading_comments),
+                brace_wrap_body_with_comments(braced_body_ir, &body_leading_comments),
             )
         }
     };
@@ -2334,15 +2346,30 @@ fn ir_function_params_with_comments(param_elements: &[SyntaxElement<RLanguage>])
     ])
 }
 
-/// The conditional group choosing the bare inline body (flat) vs the braced
-/// block (broken). The flat branch is measured by the outer group, so the bare
-/// form is used exactly when `head(params) bare_body` fits. The broken branch is
-/// the braced-block hug, which then decides the param-list break on its own.
+/// The conditional choice between bare inline body and braced-block hug.
+/// Two selectors, matched to the bare body's shape:
+///
+/// * **No forced break in the bare body** — use a single-pass group: bare
+///   wins exactly when `head(params) bare_body` fits flat as one line,
+///   otherwise the braced hug takes over (matching the legacy
+///   `Ir::group(Ir::if_break(...))` shape from before commit 410dd48).
+/// * **Forced break in the bare body** (control flow with braced arms) —
+///   route through [`Ir::conditional_group_all_lines`]: the bare form wins
+///   when every rendered line fits, mirroring legacy's `fits_with_newlines`
+///   check.
 fn function_body_choice(head: Ir, params: Ir, bare_body: Ir, braced_body: Ir) -> Ir {
-    Ir::group(Ir::if_break(
-        Ir::concat([head.clone(), params.clone(), Ir::text(" "), bare_body]),
-        function_braced_hug(head, params, braced_body),
-    ))
+    let bare = Ir::concat([
+        head.clone(),
+        params.clone(),
+        Ir::text(" "),
+        bare_body.clone(),
+    ]);
+    let braced = function_braced_hug(head, params, braced_body);
+    if bare_body.contains_forced_break() {
+        Ir::conditional_group_all_lines([bare, braced])
+    } else {
+        Ir::group(Ir::if_break(bare, braced))
+    }
 }
 
 /// `head(params) <block>` as a hug group: the param list stays inline as long as
