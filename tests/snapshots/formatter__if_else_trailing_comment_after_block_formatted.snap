@@ -1,0 +1,12 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+{
+  if (a) {
+    # comment
+    1
+  } else {
+    2
+  }
+}

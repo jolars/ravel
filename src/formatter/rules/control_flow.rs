@@ -54,13 +54,13 @@ pub(crate) fn format_if_expr(
             snippet: node.text().to_string(),
         })?;
 
+    let has_else = if_expr.else_keyword().is_some();
     let condition = format_expr_segment(&condition_elements, "if condition", indent, ctx)?;
-    let (mut then_expr, _then_is_block, interstitial_comments, interstitial_attach_to_then) =
-        format_if_then_branch_with_comments(&then_elements, indent, ctx)?;
-    let then_is_block = branch_starts_with_block(&then_elements);
+    let (mut then_expr, then_is_block, interstitial_comments, interstitial_attach_to_then) =
+        format_if_then_branch_with_comments(&then_elements, indent, ctx, has_else)?;
 
     let mut out = format!("if ({condition}) {then_expr}");
-    if if_expr.else_keyword().is_some() {
+    if has_else {
         let else_elements =
             if_expr
                 .else_elements()
@@ -69,7 +69,7 @@ pub(crate) fn format_if_expr(
                     snippet: node.text().to_string(),
                 })?;
         let mut else_expr = format_if_branch(&else_elements, indent, ctx, true)?;
-        let else_is_block = branch_starts_with_block(&else_elements);
+        let mut else_is_block = branch_starts_with_block(&else_elements);
         if !interstitial_comments.is_empty() {
             if then_is_block && interstitial_attach_to_then {
                 then_expr =
@@ -78,6 +78,7 @@ pub(crate) fn format_if_expr(
             } else {
                 else_expr =
                     prepend_comments_to_branch(&else_expr, &interstitial_comments, indent, ctx);
+                else_is_block = true;
             }
         }
         if then_is_block && !else_is_block {
@@ -96,6 +97,7 @@ fn format_if_then_branch_with_comments(
     elements: &[SyntaxElement<RLanguage>],
     indent: usize,
     ctx: FormatContext,
+    has_else: bool,
 ) -> Result<(String, bool, Vec<String>, bool), FormatError> {
     let significant = significant_elements(elements);
     if significant.is_empty() {
@@ -122,12 +124,84 @@ fn format_if_then_branch_with_comments(
         let attach_to_then = comments_attach_to_then_block(elements);
         return Ok((block, true, comments, attach_to_then));
     }
+    // For a bare body, any comment between the body and `else` would either
+    // get swallowed by the comment (same-line trailing) or render as an
+    // ambiguous sibling (own-line interstitial). Wrap the body in a synthetic
+    // block so the `else` survives, and surface own-line comments as
+    // interstitial for the caller to attach to the `else` branch.
+    let interstitial = bare_branch_interstitial_comments(elements);
+    if has_else && (!interstitial.is_empty() || bare_branch_trailing_comment(elements).is_some()) {
+        let body_only = elements_without_trailing_own_line_content(elements);
+        let body_rendered = format_if_branch(&body_only, indent + 1, ctx, false)?;
+        let wrapped = wrap_branch_in_block(&body_rendered, &[], indent, ctx);
+        return Ok((wrapped, true, interstitial, false));
+    }
     Ok((
         format_if_branch(elements, indent, ctx, false)?,
         false,
         Vec::new(),
         false,
     ))
+}
+
+/// Comments that appear after the bare body on their own line. A trailing
+/// comment on the same line as the body stays bundled with the body (and is
+/// rendered by [`format_expr_with_optional_comment`]); only own-line comments
+/// are surfaced as interstitial so the caller can move them onto the `else`
+/// branch.
+fn bare_branch_interstitial_comments(elements: &[SyntaxElement<RLanguage>]) -> Vec<String> {
+    let Some(body_idx) = elements.iter().position(|el| !is_trivia(el.kind())) else {
+        return Vec::new();
+    };
+    let post = &elements[body_idx + 1..];
+    let Some(first_newline) = post.iter().position(|el| el.kind() == SyntaxKind::NEWLINE) else {
+        return Vec::new();
+    };
+    post[first_newline + 1..]
+        .iter()
+        .filter_map(|el| match el {
+            NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+                Some(tok.text().to_string())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A same-line trailing comment on the bare body, if any. Used to detect
+/// branches that cannot be inlined safely (the comment would swallow `else`).
+fn bare_branch_trailing_comment(elements: &[SyntaxElement<RLanguage>]) -> Option<String> {
+    let body_idx = elements.iter().position(|el| !is_trivia(el.kind()))?;
+    let post = &elements[body_idx + 1..];
+    let scan_end = post
+        .iter()
+        .position(|el| el.kind() == SyntaxKind::NEWLINE)
+        .unwrap_or(post.len());
+    post[..scan_end].iter().find_map(|el| match el {
+        NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::COMMENT => {
+            Some(tok.text().to_string())
+        }
+        _ => None,
+    })
+}
+
+/// Trim everything after the bare body's line, so the remaining elements feed
+/// `format_if_branch` like a single line: the body, plus any same-line trailing
+/// comment, but no own-line trailing comments.
+fn elements_without_trailing_own_line_content(
+    elements: &[SyntaxElement<RLanguage>],
+) -> Vec<SyntaxElement<RLanguage>> {
+    let Some(body_idx) = elements.iter().position(|el| !is_trivia(el.kind())) else {
+        return elements.to_vec();
+    };
+    let after_body = body_idx + 1;
+    let Some(rel_nl) = elements[after_body..]
+        .iter()
+        .position(|el| el.kind() == SyntaxKind::NEWLINE)
+    else {
+        return elements.to_vec();
+    };
+    elements[..after_body + rel_nl].to_vec()
 }
 
 fn comments_attach_to_then_block(elements: &[SyntaxElement<RLanguage>]) -> bool {
@@ -174,9 +248,10 @@ fn prepend_comments_to_branch(
     if comments.is_empty() {
         return rendered.to_string();
     }
+    let close_suffix = format!("\n{}}}", ctx.indent_text(indent));
     if let Some(inner) = rendered
         .strip_prefix("{\n")
-        .and_then(|rest| rest.strip_suffix("\n}"))
+        .and_then(|rest| rest.strip_suffix(&close_suffix))
     {
         let mut out = String::from("{\n");
         for comment in comments {

@@ -308,11 +308,22 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `validate_supported_tokens`, and extended the
       `air_binary_expression_sticky_subset` fixture to cover `@` chains
       mirroring the existing `$` cases.
-- [ ] **`} else` separated by blank line / comment inside `{ ... }` is
-      rejected as ambiguous.** `if/else` shapes like
-      `{\n  if (c) this\n  # comment\n  else that\n}` raise
-      `"ambiguous construct for formatter (root): "{\n  a\n}else""`. Surfaced
-      by the air `if_statement.R` port.
+- [x] **`} else` separated by blank line / comment inside `{ ... }` is
+      rejected as ambiguous.** Two root causes in the if/else renderer. (1)
+      `prepend_comments_to_branch` stripped the closing brace with the literal
+      suffix `"\n}"`, which only matches at indent=0 — when the if-else was
+      nested, the suffix mismatched and the fallback re-wrapped an already-block
+      `else` branch, producing weird double `{...}` nesting (and stale
+      `else_is_block`, which then triggered another auto-brace pass). (2)
+      `format_if_then_branch_with_comments` only extracted interstitial
+      comments when the then-body was a block, so a bare-body `if (a) 1\n#
+      c\nelse 2` either let the comment swallow `else` (same-line trailing) or
+      let it inline as a trailing comment on `1`. Fix: make `prepend` indent-
+      aware, mark `else` as a block after a successful prepend, and for the
+      bare-body case auto-brace whenever a comment sits between the body and
+      `else` (so the comment never crosses the `else` boundary). Fixtures:
+      `tests/fixtures/formatter/if_else_interstitial_comment_{block,bare}`,
+      `if_else_trailing_comment_after_{block,bare}`.
 
 - [x] **Native IR arg-wrapping for subset/call/function.** All three now build
       their arg/param lists natively on the IR (group/soft-line based, with a
