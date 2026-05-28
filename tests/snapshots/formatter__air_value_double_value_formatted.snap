@@ -1,0 +1,8 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+1
+2.5
+1e6
+0x123F

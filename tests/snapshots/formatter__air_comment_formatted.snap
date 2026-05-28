@@ -1,0 +1,6 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+# Hi there!
+1 + 2

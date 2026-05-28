@@ -1,0 +1,6 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+1L
+1e5L

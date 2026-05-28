@@ -46,6 +46,12 @@ fn fixture_text(name: &str, file: &str) -> String {
 fn fixture_names() -> &'static [&'static str] {
     &[
         "air_binary_expression_subset",
+        "air_comment",
+        "air_parenthesized_expression",
+        "air_smoke",
+        "air_value_double_value",
+        "air_value_integer_value",
+        "air_value_string_value",
         "assignment_precedence",
         "if_else_block",
         "inline_comment",

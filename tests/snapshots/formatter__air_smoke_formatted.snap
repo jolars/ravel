@@ -1,0 +1,5 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+1 + 1

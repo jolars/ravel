@@ -1,0 +1,13 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+"hi there!"
+"\""
+'hi there!'
+'\''
+"'"
+"multiline
+string"
+r"("some raw string
+business")"

@@ -189,6 +189,24 @@ Done: implemented in `src/ast/nodes.rs` with tests in `tests/ast_wrappers.rs`.
       width, indentation, selected style toggles).
 - [ ] Improve stability/perf with larger fixture corpus and deterministic output
       across multi-file runs.
+      - [x] Phase A: port first batch of air formatter specs as `air_*`
+            formatter fixtures (`air_smoke`, `air_comment`,
+            `air_parenthesized_expression`, `air_value_double_value`,
+            `air_value_integer_value`, `air_value_string_value`). All six pass
+            the existing equality/parse/idempotence/losslessness/snapshot
+            invariants in `tests/formatter.rs`. The seventh candidate
+            `binary_expression.R` was dropped: ravel's parser emits 93
+            diagnostics on the spec (`:=`, the `?`/`??`/`???` help-operator
+            family, and other infix shapes not yet supported); see "Known
+            issues / Parser" for the resulting follow-ups.
+      - [ ] Phase B: port remaining viable air formatter specs (~16):
+            `binary_expression_sticky`, `braced_expressions`, `call`,
+            `dot_dot_i`, `for_statement`, `function_definition`, `if_statement`,
+            `keyword`, `pipelines`, `program`, `repeat_statement`, `subset`,
+            `subset2`, `test_that`, `unary_expression`, `while_statement`.
+            Permanently out of scope (incompatible with ravel's tenets or
+            missing features): the `persistent-line-breaks/`, `directives/`,
+            `skip/`, `table/`, `crlf/` subdirs and `call_table.R`.
 - [ ] Add migration/regression tests to ensure v2 changes remain predictable and
       safe.
 
@@ -235,6 +253,15 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       lexer (`src/parser/lexer.rs`) to consume a trailing `i` on numeric
       literals, add a dedicated token/`SyntaxKind` if warranted, and refresh the
       `air_ok_value_complex_value` snapshot.
+- [ ] **Walrus assignment `:=` is unrecognized.** The token isn't lexed/parsed
+      as an assignment operator; `1 := 2` produces "expected right-hand side
+      for binary operator". Surfaced by the air `binary_expression.R` formatter
+      spec port; blocks `air_binary_expression` from joining the formatter
+      fixture batch.
+- [ ] **Help operators `?`, `??`, `???` are unrecognized.** Constructs like
+      `1 ? 2`, `alias?"^try"`, `alias??"^try"`, `alias???"^try"` produce
+      "unexpected operator at expression start". Surfaced by the air
+      `binary_expression.R` formatter spec port.
 
 ### Formatter
 
