@@ -1,0 +1,9 @@
+---
+source: tests/formatter.rs
+expression: formatted
+---
+..1
+
+..10
+
+function(...) ..1 + ..2

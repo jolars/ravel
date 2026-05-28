@@ -199,11 +199,32 @@ Done: implemented in `src/ast/nodes.rs` with tests in `tests/ast_wrappers.rs`.
             diagnostics on the spec (`:=`, the `?`/`??`/`???` help-operator
             family, and other infix shapes not yet supported); see "Known
             issues / Parser" for the resulting follow-ups.
-      - [ ] Phase B: port remaining viable air formatter specs (~16):
-            `binary_expression_sticky`, `braced_expressions`, `call`,
-            `dot_dot_i`, `for_statement`, `function_definition`, `if_statement`,
-            `keyword`, `pipelines`, `program`, `repeat_statement`, `subset`,
-            `subset2`, `test_that`, `unary_expression`, `while_statement`.
+      - [x] Phase B: ported 13 of the 16 candidate air formatter specs as
+            `air_*` fixtures. All pass equality/parse/idempotence/
+            losslessness/snapshot invariants in `tests/formatter.rs`.
+            Four ports (`air_for_statement`, `air_keyword`,
+            `air_repeat_statement`, `air_while_statement`) match air
+            byte-for-byte. Eight ports (`air_braced_expressions`, `air_call`,
+            `air_dot_dot_i`, `air_function_definition`, `air_pipelines`,
+            `air_program`, `air_subset2`, `air_test_that`) intentionally
+            diverge: ravel's deterministic rule set drops persistent line
+            breaks, collapses blank lines between a comment and the next
+            statement, and does not name-special-case calls like `test_that`,
+            so each `expected.R` records ravel's actual rule-based output as
+            the locked regression baseline. The
+            `air_binary_expression_sticky_subset` port subsets the spec to
+            `$`/`::`/`:::`/`^`/`:`; ravel currently splits some "sticky" ops
+            across lines instead of keeping them glued (regression baseline
+            for a follow-up). Deferred (parser/formatter holes; not viable
+            even as subsets without more work): `binary_expression_sticky`
+            full (needs `?`, `**`, `@` --- the first two block parsing, the
+            third blocks formatting), `if_statement` (parser doesn't allow
+            comments between `if (` and `)`; formatter still rejects several
+            comment-bracketed `if ... else` shapes as ambiguous),
+            `subset` (parser fails on newline-between-args and on inner-
+            subset arg-list newlines when followed by certain trivia),
+            `unary_expression` (parser doesn't lex `~` as a unary/formula
+            operator, and the spec is dominated by `~`-prefixed cases).
             Permanently out of scope (incompatible with ravel's tenets or
             missing features): the `persistent-line-breaks/`, `directives/`,
             `skip/`, `table/`, `crlf/` subdirs and `call_table.R`.
@@ -262,8 +283,42 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `1 ? 2`, `alias?"^try"`, `alias??"^try"`, `alias???"^try"` produce
       "unexpected operator at expression start". Surfaced by the air
       `binary_expression.R` formatter spec port.
+- [ ] **`**` exponentiation operator is unrecognized.** R accepts `**` as a
+      synonym for `^`; ravel lexes it as two `*` tokens and reports "unexpected
+      operator at expression start". Surfaced by the air
+      `binary_expression_sticky.R` port (excluded from the subset).
+- [ ] **Formula operator `~` is unrecognized.** Both unary `~foo` and binary
+      `1~2` produce "unexpected operator at expression start". Surfaced by the
+      air `unary_expression.R` port; blocks `air_unary_expression` (the spec
+      is dominated by `~` cases).
+- [ ] **Comments inside `if (...)` condition break parsing.**
+      `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
+      `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the
+      air `if_statement.R` port.
+- [ ] **Newline between subset args breaks parsing in some contexts.**
+      `dt[, j\n  , by = col]` and inner `map[\n  names(df)\n]` followed by a
+      comment block report "expected ',' between subset arguments" / "expected
+      closing bracket". The same fragments parse standalone; the failure is
+      context-dependent on surrounding trivia. Surfaced by the air `subset.R`
+      port.
 
 ### Formatter
+
+- [ ] **`@` slot extraction is unsupported.** Parsing succeeds but formatting
+      raises `UnsupportedConstruct { kind: AT }`. Surfaced by the air
+      `binary_expression_sticky.R` port (excluded from the subset).
+- [ ] **"Sticky" binary operators sometimes break across lines.** Long
+      expressions joined by `$`, `^`, or `:` currently wrap with the operator
+      glued to the RHS instead of staying inline, e.g.
+      `argument_that_is_quite_quite_quite_quite_long\n  $argument_…`. `::` and
+      `:::` already stay glued. Locked in as the current baseline by the
+      `air_binary_expression_sticky_subset` port; tidyverse style and air keep
+      the symbol fully sticky.
+- [ ] **`} else` separated by blank line / comment inside `{ ... }` is
+      rejected as ambiguous.** `if/else` shapes like
+      `{\n  if (c) this\n  # comment\n  else that\n}` raise
+      `"ambiguous construct for formatter (root): "{\n  a\n}else""`. Surfaced
+      by the air `if_statement.R` port.
 
 - [x] **Native IR arg-wrapping for subset/call/function.** All three now build
       their arg/param lists natively on the IR (group/soft-line based, with a
