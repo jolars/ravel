@@ -229,9 +229,18 @@ fn parse_prefix(
     let tok = tokens.get(i)?;
 
     match tok.kind {
-        TokKind::Plus | TokKind::Minus | TokKind::Bang => {
+        TokKind::Plus | TokKind::Minus | TokKind::Bang | TokKind::Tilde => {
+            // Unary `~` (R formula) sits at the same low precedence tier as
+            // binary `~`, so `~ x + y` must parse as `~(x + y)`. Match the
+            // infix Tilde right-binding power (41) for the operand so that
+            // every higher-precedence infix folds into the formula RHS.
+            let rbp = if matches!(tok.kind, TokKind::Tilde) {
+                41
+            } else {
+                130
+            };
             let operand_start = i + 1;
-            let Some(operand) = parse_expr_with_mode(tokens, operand_start, 130, diagnostics, true)
+            let Some(operand) = parse_expr_with_mode(tokens, operand_start, rbp, diagnostics, true)
             else {
                 push_token_diagnostic(diagnostics, "expected operand for unary operator", tok);
                 return Some(error_expr_to_line_end(tokens, i, operand_start));
@@ -342,7 +351,6 @@ fn parse_prefix(
         | TokKind::LessThanOrEqual
         | TokKind::GreaterThan
         | TokKind::GreaterThanOrEqual
-        | TokKind::Tilde
         | TokKind::Colon2
         | TokKind::Colon3
         | TokKind::Dollar

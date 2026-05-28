@@ -22,7 +22,13 @@ pub(crate) fn ir_unary_expr(
             matches!(
                 el,
                 NodeOrToken::Token(tok)
-                    if matches!(tok.kind(), SyntaxKind::PLUS | SyntaxKind::MINUS | SyntaxKind::BANG)
+                    if matches!(
+                        tok.kind(),
+                        SyntaxKind::PLUS
+                            | SyntaxKind::MINUS
+                            | SyntaxKind::BANG
+                            | SyntaxKind::TILDE
+                    )
             )
         })
         .ok_or_else(|| FormatError::AmbiguousConstruct {

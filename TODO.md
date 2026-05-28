@@ -223,8 +223,9 @@ Done: implemented in `src/ast/nodes.rs` with tests in `tests/ast_wrappers.rs`.
             comment-bracketed `if ... else` shapes as ambiguous),
             `subset` (parser fails on newline-between-args and on inner-
             subset arg-list newlines when followed by certain trivia),
-            `unary_expression` (parser doesn't lex `~` as a unary/formula
-            operator, and the spec is dominated by `~`-prefixed cases).
+            `unary_expression` (parser blocker resolved; formatter still
+            needs air's complex-vs-terminal-operand spacing rule for
+            unary `~` to match the spec byte-for-byte).
             Permanently out of scope (incompatible with ravel's tenets or
             missing features): the `persistent-line-breaks/`, `directives/`,
             `skip/`, `table/`, `crlf/` subdirs and `call_table.R`.
@@ -287,10 +288,14 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       synonym for `^`; ravel lexes it as two `*` tokens and reports "unexpected
       operator at expression start". Surfaced by the air
       `binary_expression_sticky.R` port (excluded from the subset).
-- [ ] **Formula operator `~` is unrecognized.** Both unary `~foo` and binary
-      `1~2` produce "unexpected operator at expression start". Surfaced by the
-      air `unary_expression.R` port; blocks `air_unary_expression` (the spec
-      is dominated by `~` cases).
+- [ ] **Newline-continuation of binary `~` (and other infix ops) merges
+      separate top-level expressions.** `~foo\n~bar` parses as
+      `BINARY_EXPR{UNARY_EXPR{~foo}, ~, bar}` instead of two formulas; same
+      for `a + b\n+ c`. `next_operator` in `src/parser/expr.rs:26-41` skips a
+      newline whenever the following line starts with an infix operator, but R
+      only continues across a newline if the *prior* line is incomplete. Latent
+      before unary `~` was accepted; now affects formatter idempotence on
+      consecutive formula statements.
 - [ ] **Comments inside `if (...)` condition break parsing.**
       `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
       `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the
