@@ -114,10 +114,6 @@ pub(crate) fn ir_call_expr(
             snippet: node.text().to_string(),
         })?;
 
-    if call_comment_path_unsupported(&arg_list) {
-        return Ok(Ir::verbatim(format_call_expr(node, indent, ctx)?));
-    }
-
     let callee = ir_expr_segment(&elements[..lparen_idx], "call callee", indent, ctx)?;
 
     // Comments are relocated natively (own-line vs trailing) by an always-broken
@@ -195,35 +191,6 @@ fn arg_is_named_function(arg: &SyntaxNode) -> bool {
                     matches!(el, NodeOrToken::Token(tok)
                         if tok.kind() == SyntaxKind::FUNCTION_KW && tok.text() == "function")
                 })
-        })
-}
-
-/// The one comment shape the native comment layout does not reproduce: an
-/// argument that `format_arg` routes to the `ASSIGNMENT_EXPR` string helpers
-/// (`format_assignment_expr_arg` / `format_named_arg_with_assignment_node`) *and*
-/// that carries a comment inside the assignment. Such args are not producible
-/// from diagnostic-free input today, but the gate keeps them on the legacy
-/// renderer rather than dropping the comment.
-fn call_comment_path_unsupported(arg_list: &SyntaxNode) -> bool {
-    arg_list
-        .children()
-        .filter(|n| n.kind() == SyntaxKind::ARG)
-        .any(|arg| {
-            let significant: Vec<_> = arg
-                .children_with_tokens()
-                .filter(|el| !super::super::core::is_trivia(el.kind()))
-                .collect();
-            let assignment_based = match significant.as_slice() {
-                [NodeOrToken::Node(n)] => n.kind() == SyntaxKind::ASSIGNMENT_EXPR,
-                [NodeOrToken::Token(t), NodeOrToken::Node(n)] => {
-                    t.kind() == SyntaxKind::IDENT && n.kind() == SyntaxKind::ASSIGNMENT_EXPR
-                }
-                _ => false,
-            };
-            assignment_based
-                && arg
-                    .descendants_with_tokens()
-                    .any(|el| el.kind() == SyntaxKind::COMMENT)
         })
 }
 
