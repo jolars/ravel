@@ -112,7 +112,7 @@ easy -> medium -> hard.
 - [x] `ok/repeat_statement.R` (hard)
 - [x] `ok/dots.R` (hard)
 - [x] `ok/dot_dot_i.R` (hard)
-- [x] `ok/value/complex_value.R` (hard) — ⚠️ fixture ported but lexing is
+- [x] `ok/value/complex_value.R` (hard) --- ⚠️ fixture ported but lexing is
       **incorrect**: the imaginary suffix `i` is not lexed, so `1i` becomes
       `INT "1"` + `IDENT "i"`. See "Known issues / follow-ups" below.
 
@@ -257,7 +257,7 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       (`should_force_multiline_named_functions`). One intentional layout change
       (`call_trailing_inline_function` guards it): a multi-arg call whose
       trailing function's params must break now expands one arg per line instead
-      of hugging `callee(x, function(` — ravel's single-pass printer cannot
+      of hugging `callee(x, function(` --- ravel's single-pass printer cannot
       reproduce the legacy two-phase "format the function, then measure" hug.
 - [x] **Curly-curly `{{ }}` call args → native IR.** Dropped the curly-curly
       check from `call_needs_legacy`; `ir_call_argument` now builds `{{ x }}`
@@ -268,41 +268,44 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       wrong. Commented curly-curly forms still route to legacy via the comment
       gate (folds into comment relocation below).
 - [x] **Native IR comment relocation for call/param arg lists.** Comments no
-      longer force the legacy renderer: the `descendants_with_tokens().any(COMMENT)`
-      gate is gone from both calls and function definitions. Calls with comments
-      take an always-broken item-stream layout (`ir_call_args_with_comments`, the
-      IR port of `format_arg_list_multiline`) that classifies each comment as
-      trailing the previous line, leading on its own line, or standing alone using
-      the same `leading_newline` / `newline_after` signals; every argument
-      expression is built as real IR (`ir_call_arg_value`), comment-bearing
-      curly-curly is lifted natively (`ir_curly_curly_with_comments`). Function
-      definitions relocate leading-`function` comments (hoisted above), param-list
-      comments (raw multiline, `ir_function_params_with_comments`), and body-outer
+      longer force the legacy renderer: the
+      `descendants_with_tokens().any(COMMENT)` gate is gone from both calls and
+      function definitions. Calls with comments take an always-broken
+      item-stream layout (`ir_call_args_with_comments`, the IR port of
+      `format_arg_list_multiline`) that classifies each comment as trailing the
+      previous line, leading on its own line, or standing alone using the same
+      `leading_newline` / `newline_after` signals; every argument expression is
+      built as real IR (`ir_call_arg_value`), comment-bearing curly-curly is
+      lifted natively (`ir_curly_curly_with_comments`). Function definitions
+      relocate leading-`function` comments (hoisted above), param-list comments
+      (raw multiline, `ir_function_params_with_comments`), and body-outer
       comments (lifted into / bracing the body via
       `ir_block_expr_with_prefixed_comments` / `brace_wrap_body_with_comments`).
-      Byte-identical on every fixture (`call_comments_*`, `function_definition_comments`,
-      `braced_curly_curly_advanced`) and on the whole air R corpus (218 .R files);
-      idempotent + lossless throughout. Two intentional improvements, both absent
-      from the corpus and aligned with the prior curly-curly / native-IR work: (1) a
-      *nested* commented function definition (e.g. a `.f = function(...) # c { ... }`
-      call arg) that the legacy verbatim bridge mis-indented now lays out correctly
-      (real IR, no retrospective measurement); (2) a commented *named* curly-curly
-      value (`m = {{ # c\n x }}`) is now lifted to `{{ … }}` just like the
-      no-comment path and positional curly-curly, instead of legacy's nested-block
-      rendering — so a sibling comment no longer changes how `m = {{ x }}` prints. Remaining legacy fallbacks: a function-definition *argument* whose
+      Byte-identical on every fixture (`call_comments_*`,
+      `function_definition_comments`, `braced_curly_curly_advanced`) and on the
+      whole air R corpus (218 .R files); idempotent + lossless throughout. Two
+      intentional improvements, both absent from the corpus and aligned with the
+      prior curly-curly / native-IR work: (1) a *nested* commented function
+      definition (e.g. a `.f = function(...) # c { ... }` call arg) that the
+      legacy verbatim bridge mis-indented now lays out correctly (real IR, no
+      retrospective measurement); (2) a commented *named* curly-curly value
+      (`m = {{ # c\n x }}`) is now lifted to `{{ … }}` just like the no-comment
+      path and positional curly-curly, instead of legacy's nested-block
+      rendering --- so a sibling comment no longer changes how `m = {{ x }}`
+      prints. Remaining legacy fallbacks: a function-definition *argument* whose
       own renderer needs legacy still routes its call to `format_call_expr`
-      (`call_has_legacy_function` → `function_expr_needs_legacy`: a direct comment,
-      brace-token default, or bare body embedding a block); brace-token param
-      defaults (`function_has_brace_default`); a bare body carrying a forced break
-      (control flow). The rare `ASSIGNMENT_EXPR`-arg-with-comment shape (not
-      producible from diagnostic-free input) is kept on legacy via
+      (`call_has_legacy_function` → `function_expr_needs_legacy`: a direct
+      comment, brace-token default, or bare body embedding a block); brace-token
+      param defaults (`function_has_brace_default`); a bare body carrying a
+      forced break (control flow). The rare `ASSIGNMENT_EXPR`-arg-with-comment
+      shape (not producible from diagnostic-free input) is kept on legacy via
       `call_comment_path_unsupported`.
 - [x] **Function-definition-as-argument → native IR.** Dropped the
       `call_has_legacy_function` gate from `ir_call_expr`; a function arg with a
       brace-token default or a bare body embedding a block no longer routes its
-      *call* through legacy — only the function arg itself falls back, locally,
-      via the function-level gates. To preserve the legacy "hug the prefix"
-      layout (`map(x, function(a = { 1 }) { 1 })`), taught the printer's
+      *call* through legacy --- only the function arg itself falls back,
+      locally, via the function-level gates. To preserve the legacy "hug the
+      prefix" layout (`map(x, function(a = { 1 }) { 1 })`), taught the printer's
       `first_line_fits` to measure the first line of a multi-line `Verbatim`
       instead of bailing on `force_break: true`; single-line force-break
       Verbatims (standalone comments) still fail, so the comment path is
@@ -312,48 +315,46 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       air corpus + repo fixtures; idempotent (modulo the pre-existing
       `air_ok_for_statement` `for`-quirk).
 - [x] **Retire the dead `format_call_expr` / `format_function_expr` string
-      renderers and their ~30 param/arg helpers.** Migrated the three remaining
+      renderers and their \~30 param/arg helpers.** Migrated the three remaining
       gates that kept them alive: brace-token param defaults (now a
       `Verbatim`-bridged native path in `ir_function_param_default` /
       `ir_brace_token_default`, with a nested-block heuristic that mirrors
-      legacy's `param.contains("= {\n  {\n")` to force-break the params
-      list); `call_comment_path_unsupported` (gate dropped — the shape isn't
+      legacy's `param.contains("= {\n  {\n")` to force-break the params list);
+      `call_comment_path_unsupported` (gate dropped --- the shape isn't
       producible from diagnostic-free input); and the
       `body_ir.contains_forced_break()` fallback (replaced by
-      `Ir::ConditionalGroupAllLines` + `Printer::all_lines_fit`, the IR port
-      of `fits_with_newlines`). The bare-body branch now builds two body
-      IRs (one at `indent`, one at `indent + 1`) so a verbatim-bridged
-      control-flow body lines up correctly when the body is wrapped in
-      braces. Also dropped `fits_with_newlines` from `context.rs`;
-      `fits_inline` keeps one remaining caller (`format_while_header` in
-      `control_flow.rs`) and stays for a later migration. Byte-identical
-      across the air corpus + repo fixtures; a new
+      `Ir::ConditionalGroupAllLines` + `Printer::all_lines_fit`, the IR port of
+      `fits_with_newlines`). The bare-body branch now builds two body IRs (one
+      at `indent`, one at `indent + 1`) so a verbatim-bridged control-flow body
+      lines up correctly when the body is wrapped in braces. Also dropped
+      `fits_with_newlines` from `context.rs`; `fits_inline` keeps one remaining
+      caller (`format_while_header` in `control_flow.rs`) and stays for a later
+      migration. Byte-identical across the air corpus + repo fixtures; a new
       `function_bare_control_flow_body` fixture exercises bare `if`/`for`/
       `while`/`repeat` bodies plus a long-param auto-bracing case.
 - [x] **Lift the single-pass printer limit (conditional-group / candidate
       layouts).** Added `Ir::ConditionalGroup(Rc<[Ir]>)` plus a break-aware
-      `first_line_fits` measurement to the printer: the printer picks the
-      first candidate whose first line fits at the current column (letting
-      nested groups break naturally; success is the first emitted newline)
-      and renders it flat, else renders the last candidate broken. With a
-      single candidate this is a "break-aware group" — flat if its first
-      line fits, broken otherwise. Wired the trailing positional
-      `function(...) ...` arg shape through it via `build_arg_hug_conditional`,
-      restoring the uniform rule "a positional trailing function-callback
-      hugs its call as long as `callee(leading, function(` fits, otherwise
-      expands." The rule applies to all positional `FUNCTION_EXPR` trailing
-      args (bare or block bodies), so the legacy auto-bracing workaround is
-      no longer needed at the call level and idempotence holds without
-      special-casing block-bodied vs bare. Plain trailing blocks
-      (`map(xs, { ... })`) and subset trailing blocks keep the flat-only
-      `group_hug`. `group_hug` is now a 2-state conditional in spirit and
-      could be reframed onto `ConditionalGroup` as a follow-up. Verified
-      byte-identical to HEAD across the air corpus + repo fixtures except
-      the intentional `call_trailing_inline_function` diffs (4 cases moved
-      to hug form, including the original target `map(x, function(<long
-      params>) {1})`); idempotent and lossless throughout (the only
-      remaining non-idempotence is the pre-existing `air_ok_for_statement`
-      `for`-quirk noted in memory).
+      `first_line_fits` measurement to the printer: the printer picks the first
+      candidate whose first line fits at the current column (letting nested
+      groups break naturally; success is the first emitted newline) and renders
+      it flat, else renders the last candidate broken. With a single candidate
+      this is a "break-aware group" --- flat if its first line fits, broken
+      otherwise. Wired the trailing positional `function(...) ...` arg shape
+      through it via `build_arg_hug_conditional`, restoring the uniform rule "a
+      positional trailing function-callback hugs its call as long as
+      `callee(leading, function(` fits, otherwise expands." The rule applies to
+      all positional `FUNCTION_EXPR` trailing args (bare or block bodies), so
+      the legacy auto-bracing workaround is no longer needed at the call level
+      and idempotence holds without special-casing block-bodied vs bare. Plain
+      trailing blocks (`map(xs, { ... })`) and subset trailing blocks keep the
+      flat-only `group_hug`. `group_hug` is now a 2-state conditional in spirit
+      and could be reframed onto `ConditionalGroup` as a follow-up. Verified
+      byte-identical to HEAD across the air corpus + repo fixtures except the
+      intentional `call_trailing_inline_function` diffs (4 cases moved to hug
+      form, including the original target
+      `map(x, function(<long       params>) {1})`); idempotent and lossless
+      throughout (the only remaining non-idempotence is the pre-existing
+      `air_ok_for_statement` `for`-quirk noted in memory).
 
 ## Phase 6: Linter and LSP integration (deferred)
 
