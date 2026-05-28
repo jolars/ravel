@@ -229,15 +229,16 @@ fn parse_prefix(
     let tok = tokens.get(i)?;
 
     match tok.kind {
-        TokKind::Plus | TokKind::Minus | TokKind::Bang | TokKind::Tilde => {
-            // Unary `~` (R formula) sits at the same low precedence tier as
-            // binary `~`, so `~ x + y` must parse as `~(x + y)`. Match the
-            // infix Tilde right-binding power (41) for the operand so that
-            // every higher-precedence infix folds into the formula RHS.
-            let rbp = if matches!(tok.kind, TokKind::Tilde) {
-                41
-            } else {
-                130
+        TokKind::Plus | TokKind::Minus | TokKind::Bang | TokKind::Tilde | TokKind::Question => {
+            // Unary `~` (R formula) and unary `?` (help) sit at the same low
+            // precedence tier as their binary counterparts, so `~ x + y` must
+            // parse as `~(x + y)` and `? x + y` as `?(x + y)`. Match the infix
+            // right-binding power so every higher-precedence infix folds into
+            // the operand.
+            let rbp = match tok.kind {
+                TokKind::Tilde => 41,
+                TokKind::Question => 1,
+                _ => 130,
             };
             let operand_start = i + 1;
             let Some(operand) = parse_expr_with_mode(tokens, operand_start, rbp, diagnostics, true)
@@ -915,9 +916,11 @@ fn infix_binding_power(kind: &TokKind) -> Option<(u8, u8)> {
     // Binding powers are aligned to AIR's operator precedence tiers:
     // LogicalOr (5), LogicalAnd (6), Relational (8), Additive (9),
     // Multiplicative (10), Special (11), Colon (12), Tilde (4), Exponential (14).
-    // Namespace/extract operators (`::`, `:::`, `$`, `@`) bind tighter than
-    // exponentiation and are treated as left-associative in this CST parser.
+    // Help (`?`) sits below assignment as in R, so `x <- 1 ? 2` parses as
+    // `(x <- 1) ? 2`. Namespace/extract operators (`::`, `:::`, `$`, `@`) bind
+    // tighter than exponentiation and are treated as left-associative.
     match kind {
+        TokKind::Question => Some((0, 1)),
         TokKind::Or | TokKind::Or2 => Some((50, 51)),
         TokKind::And | TokKind::And2 => Some((60, 61)),
         TokKind::Equal2

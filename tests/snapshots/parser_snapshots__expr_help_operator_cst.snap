@@ -1,0 +1,63 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..64
+  UNARY_EXPR@0..6
+    QUESTION@0..1 "?"
+    IDENT@1..6 "topic"
+  SEMICOLON@6..7 ";"
+  WHITESPACE@7..8 " "
+  BINARY_EXPR@8..17
+    IDENT@8..11 "pkg"
+    QUESTION@11..12 "?"
+    IDENT@12..17 "topic"
+  SEMICOLON@17..18 ";"
+  WHITESPACE@18..19 " "
+  UNARY_EXPR@19..22
+    QUESTION@19..20 "?"
+    UNARY_EXPR@20..22
+      QUESTION@20..21 "?"
+      IDENT@21..22 "x"
+  SEMICOLON@22..23 ";"
+  WHITESPACE@23..24 " "
+  BINARY_EXPR@24..32
+    IDENT@24..27 "pkg"
+    QUESTION@27..28 "?"
+    UNARY_EXPR@28..32
+      QUESTION@28..29 "?"
+      STRING@29..32 "\"x\""
+  SEMICOLON@32..33 ";"
+  WHITESPACE@33..34 " "
+  BINARY_EXPR@34..43
+    IDENT@34..37 "pkg"
+    QUESTION@37..38 "?"
+    UNARY_EXPR@38..43
+      QUESTION@38..39 "?"
+      UNARY_EXPR@39..43
+        QUESTION@39..40 "?"
+        STRING@40..43 "\"x\""
+  SEMICOLON@43..44 ";"
+  WHITESPACE@44..45 " "
+  BINARY_EXPR@45..55
+    ASSIGNMENT_EXPR@45..51
+      IDENT@45..46 "x"
+      WHITESPACE@46..47 " "
+      ASSIGN_LEFT@47..49 "<-"
+      WHITESPACE@49..50 " "
+      INT@50..51 "1"
+    WHITESPACE@51..52 " "
+    QUESTION@52..53 "?"
+    WHITESPACE@53..54 " "
+    INT@54..55 "2"
+  SEMICOLON@55..56 ";"
+  WHITESPACE@56..57 " "
+  UNARY_EXPR@57..63
+    QUESTION@57..58 "?"
+    BINARY_EXPR@58..63
+      IDENT@58..59 "x"
+      WHITESPACE@59..60 " "
+      PLUS@60..61 "+"
+      WHITESPACE@61..62 " "
+      IDENT@62..63 "y"
+  NEWLINE@63..64 "\n"

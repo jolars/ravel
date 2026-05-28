@@ -3,20 +3,21 @@ source: tests/parser_snapshots.rs
 expression: tree
 ---
 ROOT@0..71
-  BINARY_EXPR@0..8
-    BINARY_EXPR@0..5
-      UNARY_EXPR@0..2
-        PLUS@0..1 "+"
-        INT@1..2 "1"
-      NEWLINE@2..3 "\n"
-      MINUS@3..4 "-"
-      INT@4..5 "1"
-    NEWLINE@5..6 "\n"
-    TILDE@6..7 "~"
-    INT@7..8 "1"
-  NEWLINE@8..9 "\n"
-  ERROR@9..10 "?"
-  INT@10..11 "1"
+  BINARY_EXPR@0..11
+    BINARY_EXPR@0..8
+      BINARY_EXPR@0..5
+        UNARY_EXPR@0..2
+          PLUS@0..1 "+"
+          INT@1..2 "1"
+        NEWLINE@2..3 "\n"
+        MINUS@3..4 "-"
+        INT@4..5 "1"
+      NEWLINE@5..6 "\n"
+      TILDE@6..7 "~"
+      INT@7..8 "1"
+    NEWLINE@8..9 "\n"
+    QUESTION@9..10 "?"
+    INT@10..11 "1"
   NEWLINE@11..12 "\n"
   ERROR@12..18
     BANG@12..13 "!"

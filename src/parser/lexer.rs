@@ -15,6 +15,7 @@ pub(crate) enum TokKind {
     LambdaFn,
     InKw,
     Tilde,
+    Question,
     UserOp,
     LBrack,
     RBrack,
@@ -120,6 +121,15 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 out.push(Token {
                     kind: TokKind::Tilde,
                     text: "~".to_string(),
+                    start: i,
+                    end: i + 1,
+                });
+                i += 1;
+            }
+            '?' => {
+                out.push(Token {
+                    kind: TokKind::Question,
+                    text: "?".to_string(),
                     start: i,
                     end: i + 1,
                 });

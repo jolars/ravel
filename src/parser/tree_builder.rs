@@ -30,6 +30,7 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::String => SyntaxKind::STRING,
         TokKind::Comment => SyntaxKind::COMMENT,
         TokKind::Tilde => SyntaxKind::TILDE,
+        TokKind::Question => SyntaxKind::QUESTION,
         TokKind::UserOp => SyntaxKind::USER_OP,
         TokKind::LBrack => SyntaxKind::LBRACK,
         TokKind::RBrack => SyntaxKind::RBRACK,

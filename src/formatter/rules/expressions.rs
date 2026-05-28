@@ -28,6 +28,7 @@ pub(crate) fn ir_unary_expr(
                             | SyntaxKind::MINUS
                             | SyntaxKind::BANG
                             | SyntaxKind::TILDE
+                            | SyntaxKind::QUESTION
                     )
             )
         })
@@ -120,6 +121,7 @@ pub(crate) fn ir_binary_expr(
                             | SyntaxKind::GREATER_THAN
                             | SyntaxKind::GREATER_THAN_OR_EQUAL
                             | SyntaxKind::TILDE
+                            | SyntaxKind::QUESTION
                             | SyntaxKind::USER_OP
                             | SyntaxKind::COLON2
                             | SyntaxKind::COLON3

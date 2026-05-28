@@ -3,11 +3,12 @@ source: tests/parser_snapshots.rs
 expression: tree
 ---
 ROOT@0..259
-  INT@0..1 "1"
-  WHITESPACE@1..2 " "
-  ERROR@2..3 "?"
-  WHITESPACE@3..4 " "
-  INT@4..5 "2"
+  BINARY_EXPR@0..5
+    INT@0..1 "1"
+    WHITESPACE@1..2 " "
+    QUESTION@2..3 "?"
+    WHITESPACE@3..4 " "
+    INT@4..5 "2"
   NEWLINE@5..6 "\n"
   BINARY_EXPR@6..11
     INT@6..7 "1"

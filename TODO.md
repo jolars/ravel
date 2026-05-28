@@ -274,10 +274,17 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       for binary operator". Surfaced by the air `binary_expression.R` formatter
       spec port; blocks `air_binary_expression` from joining the formatter
       fixture batch.
-- [ ] **Help operators `?`, `??`, `???` are unrecognized.** Constructs like
-      `1 ? 2`, `alias?"^try"`, `alias??"^try"`, `alias???"^try"` produce
-      "unexpected operator at expression start". Surfaced by the air
-      `binary_expression.R` formatter spec port.
+- [x] **Help operator `?` (with chained forms `??`, `???`, …).** `?` now
+      parses as both unary (`?topic`) and binary (`pkg?topic`) at lowest
+      precedence (binding power `(0, 1)`, below assignment so `x <- 1 ? 2`
+      becomes `(x <- 1) ? 2`). There is no separate `??` token: chains like
+      `pkg??"x"` and `pkg???"x"` parse via repeated unary/binary application
+      (`pkg ? (? "x")`, `pkg ? (? (? "x"))`), matching R itself. Fixture:
+      `tests/fixtures/parser/expr_help_operator`. Note: the pre-existing
+      `next_operator` newline-continuation bug also applies to `?`, so
+      consecutive `?`-headed lines are still merged across newlines and
+      formatter idempotence is not guaranteed for them — same root cause as
+      the unary `~` follow-up below.
 - [ ] **`**` exponentiation operator is unrecognized.** R accepts `**` as a
       synonym for `^`; ravel lexes it as two `*` tokens and reports "unexpected
       operator at expression start". Surfaced by the air
