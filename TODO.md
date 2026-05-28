@@ -305,31 +305,30 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       string-based control-flow loop-body / external-body helpers in `rules/`, so
       they go once those (function-arg migration + brace defaults + control flow)
       are migrated.
-- [ ] **Lift the single-pass printer limit (conditional-group / candidate
-      layouts).** *(own session — printer-core change)* The printer
-      (`src/formatter/printer.rs`) is single-pass and greedy: each `Group` is
-      wholly flat or wholly broken, and `fits` (line 168) measures only flat,
-      forcing nested groups flat too. So it cannot reproduce the legacy
-      two-phase "format the inner construct, *then* measure" decision — e.g.
-      "keep the call flat **and** break the trailing function's params"
-      (`map(x, function(<long params>) { 1 })`, the intentional diff guarded by
-      `call_trailing_inline_function`). Fix: add a Prettier-style
-      **`conditionalGroup`** — an ordered list of candidate layouts (C0 all
-      flat; C1 call flat + inner laid out by its own natural breaks; C2
-      expanded); the printer picks the first whose **first line fits**, where
-      the measurement lets nested groups break naturally and treats the first
-      resulting newline as success. Verified on paper to restore byte-identical
-      legacy output for the whole `call_trailing_inline_function` fixture (so
-      the intentional diff can be reverted). `group_hug` is then just a 2-state
-      conditionalGroup (`[hugged, expanded]`), so this can unify/replace it, and
-      it unblocks every future `fits_with_newlines`-based migration (comment
-      relocation, control flow). Lighter-weight alternative: make the hug `fits`
-      *break-aware* (let nested groups break, succeed at the first newline) —
-      ~10 lines but mutates shared hug semantics, so it needs the full
-      fixture+corpus suite to confirm no regressions. Tenet 1 holds either way
-      (choice is content+width driven, candidates built from content not input
-      breaks). See memory `printer-cannot-two-phase-measure` /
-      `printer-fits-is-local`.
+- [x] **Lift the single-pass printer limit (conditional-group / candidate
+      layouts).** Added `Ir::ConditionalGroup(Rc<[Ir]>)` plus a break-aware
+      `first_line_fits` measurement to the printer: the printer picks the
+      first candidate whose first line fits at the current column (letting
+      nested groups break naturally; success is the first emitted newline)
+      and renders it flat, else renders the last candidate broken. With a
+      single candidate this is a "break-aware group" — flat if its first
+      line fits, broken otherwise. Wired the trailing positional
+      `function(...) ...` arg shape through it via `build_arg_hug_conditional`,
+      restoring the uniform rule "a positional trailing function-callback
+      hugs its call as long as `callee(leading, function(` fits, otherwise
+      expands." The rule applies to all positional `FUNCTION_EXPR` trailing
+      args (bare or block bodies), so the legacy auto-bracing workaround is
+      no longer needed at the call level and idempotence holds without
+      special-casing block-bodied vs bare. Plain trailing blocks
+      (`map(xs, { ... })`) and subset trailing blocks keep the flat-only
+      `group_hug`. `group_hug` is now a 2-state conditional in spirit and
+      could be reframed onto `ConditionalGroup` as a follow-up. Verified
+      byte-identical to HEAD across the air corpus + repo fixtures except
+      the intentional `call_trailing_inline_function` diffs (4 cases moved
+      to hug form, including the original target `map(x, function(<long
+      params>) {1})`); idempotent and lossless throughout (the only
+      remaining non-idempotence is the pre-existing `air_ok_for_statement`
+      `for`-quirk noted in memory).
 
 ## Phase 6: Linter and LSP integration (deferred)
 

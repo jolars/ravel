@@ -153,9 +153,30 @@ impl Printer {
                     };
                     stack.push((indent, m, inner));
                 }
+                Ir::ConditionalGroup(cands) => {
+                    let (m, chosen) = self.pick_candidate(w.col, cands);
+                    stack.push((indent, m, chosen));
+                }
             }
         }
         w.out
+    }
+
+    /// Pick the layout for an [`Ir::ConditionalGroup`] at the current column:
+    /// the first candidate whose first line fits is rendered flat; if none, the
+    /// last candidate is rendered broken. With a single candidate this is a
+    /// "break-aware group" — flat if its first line fits, broken otherwise.
+    fn pick_candidate<'a>(&self, col: usize, cands: &'a [Ir]) -> (Mode, &'a Ir) {
+        let n = cands.len();
+        for (i, c) in cands.iter().enumerate() {
+            if self.first_line_fits(col, c) {
+                return (Mode::Flat, c);
+            }
+            if i + 1 == n {
+                return (Mode::Break, c);
+            }
+        }
+        unreachable!("Ir::ConditionalGroup builder rejects empty candidate lists")
     }
 
     /// Simulate `node` flat, starting at column `start_col`. Returns false on the
@@ -207,6 +228,86 @@ impl Printer {
                         return false;
                     }
                     stack.push(inner);
+                }
+                // Conservative: measure as the flat-most candidate. A nested
+                // conditional group inside a flat measurement is rare today
+                // (the only producer is the trailing-function call hug); if
+                // and when one nests, this matches the most permissive layout.
+                Ir::ConditionalGroup(cands) => {
+                    if let Some(first) = cands.first() {
+                        stack.push(first);
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Does the *first line* of `node` fit starting at `start_col`? Unlike
+    /// [`Self::fits`] (a flat simulation), this lets nested [`Ir::Group`]s
+    /// decide their own break naturally — they re-use the existing flat
+    /// `fits` exactly as the real printer does — and treats the first
+    /// newline that would actually be emitted (a `HardLine`/`EmptyLine`, a
+    /// `Line`/`SoftLine` in `Break` mode, or anything in a nested group
+    /// decided `Break`) as success. A forced-break `Verbatim` fails, since
+    /// the candidate cannot be rendered flat at all.
+    fn first_line_fits(&self, start_col: usize, node: &Ir) -> bool {
+        let mut col = start_col;
+        let mut stack: Vec<(Mode, &Ir)> = vec![(Mode::Flat, node)];
+        while let Some((mode, node)) = stack.pop() {
+            match node {
+                Ir::Nil => {}
+                Ir::Text(s) => {
+                    col += s.chars().count();
+                    if col > self.line_width {
+                        return false;
+                    }
+                }
+                Ir::Verbatim { text, force_break } => {
+                    if *force_break {
+                        return false;
+                    }
+                    col += text.chars().count();
+                    if col > self.line_width {
+                        return false;
+                    }
+                }
+                Ir::Concat(items) => {
+                    for item in items.iter().rev() {
+                        stack.push((mode, item));
+                    }
+                }
+                Ir::Indent(inner) => stack.push((mode, inner)),
+                Ir::Line => match mode {
+                    Mode::Flat => {
+                        col += 1;
+                        if col > self.line_width {
+                            return false;
+                        }
+                    }
+                    Mode::Break => return true,
+                },
+                Ir::SoftLine => {
+                    if mode == Mode::Break {
+                        return true;
+                    }
+                }
+                Ir::HardLine | Ir::EmptyLine => return true,
+                Ir::IfBreak { flat, broken } => {
+                    let chosen = if mode == Mode::Break { broken } else { flat };
+                    stack.push((mode, chosen));
+                }
+                Ir::Group { inner, expand, hug } => {
+                    let m = if *expand || !self.fits(col, inner, *hug) {
+                        Mode::Break
+                    } else {
+                        Mode::Flat
+                    };
+                    stack.push((m, inner));
+                }
+                Ir::ConditionalGroup(cands) => {
+                    let (m, chosen) = self.pick_candidate(col, cands);
+                    stack.push((m, chosen));
                 }
             }
         }
@@ -283,5 +384,88 @@ mod tests {
         ]));
         // Expanded: the comment lands on its own line and the block is indented.
         assert_eq!(printer.print(&ir), "f(\n  # c\n  a,\n  {\n    body\n  }\n)");
+    }
+
+    /// A nested group whose flat form overflows the line but whose own break
+    /// emits a newline before the overflow point. The conditional group's
+    /// first-line measurement lets the nested group break, so the outer line
+    /// fits even though the inner cannot stay flat.
+    fn nested_breakable_group(width: usize) -> Ir {
+        let long = "x".repeat(width);
+        // Inner group: flat = `(<long>)` (overflows at width ≥ ~outer.width);
+        // broken = `(\n  <long>\n)`.
+        let inner = Ir::group(Ir::concat([
+            Ir::text("("),
+            Ir::indent(Ir::concat([Ir::soft_line(), Ir::text(long)])),
+            Ir::soft_line(),
+            Ir::text(")"),
+        ]));
+        // Outer candidate: `f` then the inner group. Its first line is `f(`.
+        Ir::concat([Ir::text("f"), inner])
+    }
+
+    #[test]
+    fn conditional_group_single_candidate_flat_when_first_line_fits() {
+        // The inner group cannot fit flat (long >> width), but the conditional
+        // group's first-line measurement lets it break naturally: `f(` fits
+        // and the inner emits its own newline.
+        let style = FormatStyle {
+            line_width: 10,
+            indent_width: 2,
+        };
+        let printer = Printer::new(style);
+        let ir = Ir::conditional_group([nested_breakable_group(20)]);
+        assert_eq!(printer.print(&ir), "f(\n  xxxxxxxxxxxxxxxxxxxx\n)");
+    }
+
+    #[test]
+    fn conditional_group_single_candidate_breaks_when_first_line_does_not_fit() {
+        // A long literal in the candidate's first line itself blows the budget
+        // before any nested group can break: fall to Break mode for the same
+        // (single) candidate.
+        let style = FormatStyle {
+            line_width: 5,
+            indent_width: 2,
+        };
+        let printer = Printer::new(style);
+        // Candidate: `verylong` then a Line. In Flat: `verylong ` overflows;
+        // in Break: the Line becomes a newline.
+        let ir = Ir::conditional_group([Ir::concat([
+            Ir::text("verylong"),
+            Ir::line(),
+            Ir::text("x"),
+        ])]);
+        assert_eq!(printer.print(&ir), "verylong\nx");
+    }
+
+    #[test]
+    fn conditional_group_picks_first_fitting_candidate() {
+        let style = FormatStyle {
+            line_width: 6,
+            indent_width: 2,
+        };
+        let printer = Printer::new(style);
+        // c0 doesn't fit; c1 fits; c2 (fallback) never reached.
+        let c0 = Ir::text("toolongtofit");
+        let c1 = Ir::text("ok");
+        let c2 = Ir::concat([Ir::text("fallback"), Ir::hard_line(), Ir::text("more")]);
+        let ir = Ir::conditional_group([c0, c1, c2]);
+        assert_eq!(printer.print(&ir), "ok");
+    }
+
+    #[test]
+    fn conditional_group_falls_back_to_last_in_break_mode() {
+        let style = FormatStyle {
+            line_width: 4,
+            indent_width: 2,
+        };
+        let printer = Printer::new(style);
+        // Neither earlier candidate fits; the last is rendered broken (its
+        // `Line` becomes a newline).
+        let c0 = Ir::text("toolongtofit");
+        let c1 = Ir::text("alsotoolong");
+        let c2 = Ir::concat([Ir::text("ab"), Ir::line(), Ir::text("cd")]);
+        let ir = Ir::conditional_group([c0, c1, c2]);
+        assert_eq!(printer.print(&ir), "ab\ncd");
     }
 }

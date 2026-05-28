@@ -57,6 +57,14 @@ pub(crate) enum Ir {
     /// stay flat (used for comments and for multi-line bridged renderings);
     /// otherwise it behaves as opaque inline text of its own width.
     Verbatim { text: Rc<str>, force_break: bool },
+    /// An ordered list of candidate layouts. The printer picks the first
+    /// candidate whose *first line* fits at the current column under a
+    /// break-aware measurement (nested groups decide their own break, success
+    /// is the first emitted newline); if none fit, the last candidate is
+    /// rendered broken. With a single candidate this degenerates to a
+    /// "break-aware group": flat if its first line fits, broken otherwise.
+    /// Must contain at least one candidate.
+    ConditionalGroup(Rc<[Ir]>),
     /// Nothing.
     Nil,
 }
@@ -115,6 +123,17 @@ impl Ir {
             expand: false,
             hug: true,
         }
+    }
+
+    /// An ordered list of candidate layouts; see [`Ir::ConditionalGroup`].
+    /// Panics if `candidates` is empty.
+    pub(crate) fn conditional_group(candidates: impl IntoIterator<Item = Ir>) -> Ir {
+        let cands: Vec<Ir> = candidates.into_iter().collect();
+        assert!(
+            !cands.is_empty(),
+            "Ir::conditional_group requires at least one candidate"
+        );
+        Ir::ConditionalGroup(cands.into())
     }
 
     pub(crate) fn indent(inner: Ir) -> Ir {
@@ -178,6 +197,9 @@ impl Ir {
             Ir::Concat(items) => items.iter().any(Ir::contains_forced_break),
             Ir::Indent(inner) => inner.contains_forced_break(),
             Ir::Group { inner, expand, .. } => *expand || inner.contains_forced_break(),
+            // The flat-most candidate decides: if even it forces a break, the
+            // conditional group always breaks; otherwise some layout is flat-able.
+            Ir::ConditionalGroup(cands) => cands.first().is_some_and(Ir::contains_forced_break),
             Ir::Text(_) | Ir::Line | Ir::SoftLine | Ir::IfBreak { .. } | Ir::Nil => false,
         }
     }

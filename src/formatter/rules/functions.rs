@@ -9,7 +9,8 @@ use super::super::core::{
 use super::super::ir::Ir;
 use super::super::trivia::split_lines;
 use super::expressions::{
-    ArgSlot, build_arg_group, build_arg_hug, expr_ends_in_block, should_force_leading_hole_expand,
+    ArgSlot, build_arg_group, build_arg_hug, build_arg_hug_conditional, expr_ends_in_block,
+    should_force_leading_hole_expand,
 };
 use crate::parser::parse;
 use crate::syntax::{RLanguage, SyntaxKind, SyntaxNode};
@@ -389,20 +390,12 @@ fn bare_body_embeds_block(fn_node: &SyntaxNode) -> bool {
     }
 }
 
-/// A *positional* trailing function-definition argument with a block body
-/// (`function(...) { ... }`), whose arg list can hug the body's opening brace
-/// like a bare trailing block. Detected structurally (not via a forced break),
-/// since a single-statement block flattens to a bare body whose group hides the
-/// break. Named function args (`f = function(...) ...`) are excluded, mirroring
-/// the legacy renderer, which only hugs trailing args that start with
-/// `function(`.
-fn expr_is_block_bodied_function(node: &SyntaxNode) -> bool {
-    node.kind() == SyntaxKind::FUNCTION_EXPR
-        && !value_node_is_named_arg(node)
-        && node
-            .children()
-            .last()
-            .is_some_and(|body| body.kind() == SyntaxKind::BLOCK_EXPR)
+/// A *positional* function-definition argument (`function(...) ...` or
+/// `\(...) ...`) used as the trailing arg of a call. Named function args
+/// (`f = function(...) ...`) are excluded, mirroring the legacy renderer,
+/// which only hugs trailing args that start with `function(`.
+fn expr_is_positional_function(node: &SyntaxNode) -> bool {
+    node.kind() == SyntaxKind::FUNCTION_EXPR && !value_node_is_named_arg(node)
 }
 
 /// Whether this argument-value node sits in a named call argument: its parent is
@@ -678,18 +671,27 @@ fn build_call_args_ir(slots: &[ArgSlot], force_named_functions: bool) -> Ir {
     let first_non_empty = slots.iter().position(|s| !s.is_empty_hole());
     let no_non_empty = first_non_empty.is_none();
 
-    let trailing_block = !force_named_functions
-        && slots[..last].iter().all(|s| !s.has_forced_break())
-        && match &slots[last] {
-            ArgSlot::Expr {
-                ir,
-                expr_node: Some(node),
-            } => {
-                (expr_ends_in_block(node) && ir.contains_forced_break())
-                    || expr_is_block_bodied_function(node)
-            }
-            _ => false,
-        };
+    // A positional trailing function-definition argument hugs its call: the
+    // call's first line `callee(leading, function(` must fit, and any further
+    // breaking happens inside the function. This is the IR-native form of the
+    // legacy "format-then-measure" hug. Route it through the conditional
+    // variant whose break-aware first-line measurement lets the function's
+    // own params/body group break naturally during the decision (the flat
+    // `group_hug` would measure the function flat and overflow before its
+    // params have a chance to break, collapsing the whole call into the
+    // expanded one-arg-per-line layout). A plain trailing block has no such
+    // nested breakable group before its opening brace, so the flat-only
+    // `group_hug` still suffices.
+    let leading_ok = !force_named_functions && slots[..last].iter().all(|s| !s.has_forced_break());
+    let trailing_function = leading_ok
+        && matches!(&slots[last], ArgSlot::Expr { expr_node: Some(node), .. }
+            if expr_is_positional_function(node));
+    let trailing_block = leading_ok
+        && matches!(&slots[last], ArgSlot::Expr { ir, expr_node: Some(node) }
+            if expr_ends_in_block(node) && ir.contains_forced_break());
+    if trailing_function {
+        return build_arg_hug_conditional(slots, "(", ")", first_non_empty, no_non_empty);
+    }
     if trailing_block {
         return build_arg_hug(slots, "(", ")", first_non_empty, no_non_empty);
     }

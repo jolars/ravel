@@ -748,6 +748,45 @@ pub(crate) fn build_arg_hug(
     first_non_empty: Option<usize>,
     no_non_empty: bool,
 ) -> Ir {
+    Ir::group_hug(build_arg_hug_inner(
+        slots,
+        open,
+        close,
+        first_non_empty,
+        no_non_empty,
+    ))
+}
+
+/// Same shape as [`build_arg_hug`] but wrapped in a single-candidate
+/// [`Ir::ConditionalGroup`], so the printer uses a break-aware first-line
+/// measurement instead of `group_hug`'s flat-only one. Rendering is otherwise
+/// identical: flat = hug, broken = expanded. Use this when the trailing
+/// element itself contains a nested group whose own break should be honored
+/// during the hug decision (e.g. a trailing function definition whose `params`
+/// group can break independently — see `build_call_args_ir`).
+pub(crate) fn build_arg_hug_conditional(
+    slots: &[ArgSlot],
+    open: &str,
+    close: &str,
+    first_non_empty: Option<usize>,
+    no_non_empty: bool,
+) -> Ir {
+    Ir::conditional_group([build_arg_hug_inner(
+        slots,
+        open,
+        close,
+        first_non_empty,
+        no_non_empty,
+    )])
+}
+
+fn build_arg_hug_inner(
+    slots: &[ArgSlot],
+    open: &str,
+    close: &str,
+    first_non_empty: Option<usize>,
+    no_non_empty: bool,
+) -> Ir {
     let last = slots.len() - 1;
 
     // Leading args (everything before the trailing block) render flat in the
@@ -765,7 +804,7 @@ pub(crate) fn build_arg_hug(
     }
 
     let block_ir = slots[last].content();
-    let inner = Ir::concat([
+    Ir::concat([
         Ir::text(open),
         Ir::indent(Ir::concat(leading)),
         // Flat: the block hugs the prefix. Broken: it drops to its own indented
@@ -776,6 +815,5 @@ pub(crate) fn build_arg_hug(
         ),
         Ir::soft_line(),
         Ir::text(close),
-    ]);
-    Ir::group_hug(inner)
+    ])
 }
