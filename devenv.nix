@@ -40,6 +40,10 @@
       enable = true;
     };
 
+    r = {
+      enable = true;
+    };
+
     javascript = {
       enable = true;
 
