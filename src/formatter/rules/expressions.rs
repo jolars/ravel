@@ -84,7 +84,7 @@ pub(crate) fn ir_assignment_expr(
 }
 
 /// IR builder for binary expressions. Mirrors [`format_binary_expr`]:
-/// - `::` / `:::` / `^` / `:` / `$` are sticky and never wrap;
+/// - `::` / `:::` / `^` / `:` / `$` / `@` are sticky and never wrap;
 /// - `|>` and `%>%` always break after the operator;
 /// - everything else gets a space-separated group whose broken form keeps the
 ///   operator on the prior line (R-valid continuation) and indents the right
@@ -126,6 +126,7 @@ pub(crate) fn ir_binary_expr(
                             | SyntaxKind::COLON2
                             | SyntaxKind::COLON3
                             | SyntaxKind::DOLLAR
+                            | SyntaxKind::AT
                     )
             )
         })
@@ -149,6 +150,7 @@ pub(crate) fn ir_binary_expr(
             | SyntaxKind::CARET
             | SyntaxKind::COLON
             | SyntaxKind::DOLLAR
+            | SyntaxKind::AT
     ) {
         return Ok(Ir::concat([lhs, Ir::text(op_text), rhs]));
     }

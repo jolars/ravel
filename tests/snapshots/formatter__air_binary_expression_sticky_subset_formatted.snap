@@ -4,6 +4,7 @@ expression: formatted
 ---
 # Whitespace is trimmed
 a$b
+a@b
 a::b
 a:::b
 1^2
@@ -11,6 +12,7 @@ a:::b
 
 # The symbol is sticky to the operator, there is never a line break immediately after `$`
 argument_that_is_quite_quite_quite_quite_long$argument_that_is_quite_quite_quite_long
+argument_that_is_quite_quite_quite_quite_long@argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long::argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long:::argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long^argument_that_is_quite_quite_quite_quite_long
@@ -18,6 +20,9 @@ argument_that_is_quite_quite_quite_quite_long:argument_that_is_quite_quite_quite
 
 # If the RHS contains other complex expressions, they are allowed to break
 argument_that_is_quite_quite_quite_quite_long$argument_that_is_quite_quite_quite_long(
+  argument_that_is_quite_quite_quite_long
+)
+argument_that_is_quite_quite_quite_quite_long@argument_that_is_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 argument_that_is_quite_quite_quite_quite_long::argument_that_is_quite_quite_quite_long(
@@ -33,10 +38,13 @@ argument_that_is_quite_quite_quite_quite_long:argument_that_is_quite_quite_quite
   argument_that_is_quite_quite_quite_long
 )
 
-# `$` and regular binary operators are allowed complex expressions on their LHS
+# `$` and `@` and regular binary operators are allowed complex expressions on their LHS
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )$argument_that_is_quite_quite_quite_long
+argument_that_is_quite_quite_quite_quite_long(
+  argument_that_is_quite_quite_quite_long
+)@argument_that_is_quite_quite_quite_long
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )^argument_that_is_quite_quite_quite_quite_long
@@ -48,6 +56,11 @@ argument_that_is_quite_quite_quite_quite_long(
 argument_that_is_quite_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )$argument_that_is_quite_quite_quite_long(
+  argument_that_is_quite_quite_quite_long
+)
+argument_that_is_quite_quite_quite_quite_long(
+  argument_that_is_quite_quite_quite_long
+)@argument_that_is_quite_quite_quite_long(
   argument_that_is_quite_quite_quite_long
 )
 argument_that_is_quite_quite_quite_quite_long(

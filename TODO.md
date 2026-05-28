@@ -301,9 +301,13 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ### Formatter
 
-- [ ] **`@` slot extraction is unsupported.** Parsing succeeds but formatting
-      raises `UnsupportedConstruct { kind: AT }`. Surfaced by the air
-      `binary_expression_sticky.R` port (excluded from the subset).
+- [x] **`@` slot extraction is unsupported.** Treat `@` like the other sticky
+      binary operators (`$`, `::`, `:::`, `^`, `:`): never wrap, no spaces
+      around. Added `SyntaxKind::AT` to both the operator-detection and
+      sticky-operator sets in `ir_binary_expr`, dropped `AT` from
+      `validate_supported_tokens`, and extended the
+      `air_binary_expression_sticky_subset` fixture to cover `@` chains
+      mirroring the existing `$` cases.
 - [ ] **`} else` separated by blank line / comment inside `{ ... }` is
       rejected as ambiguous.** `if/else` shapes like
       `{\n  if (c) this\n  # comment\n  else that\n}` raise

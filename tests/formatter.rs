@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use ravel::formatter::{FormatError, FormatStyle, format, format_with_style};
+use ravel::formatter::{FormatStyle, format, format_with_style};
 use ravel::parser::{parse, reconstruct};
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -143,9 +143,11 @@ fn preserves_comment_only_lines() {
 }
 
 #[test]
-fn rejects_unsupported_constructs_explicitly() {
-    let err = format("x @ y\n").expect_err("@ is unsupported currently");
-    assert!(matches!(err, FormatError::UnsupportedConstruct { .. }));
+fn formats_at_slot_extraction_like_dollar() {
+    let input = "x @ y\n";
+    let expected = "x@y\n";
+    let formatted = format(input).expect("@ slot extraction should format");
+    assert_eq!(formatted, expected);
 }
 
 #[test]
@@ -236,14 +238,6 @@ fn cli_format_verify_formats_stdin() {
         String::from_utf8_lossy(&output.stdout),
         "if (x) {\n  y <- 1 + 2\n} else {\n  z <- 3\n}\n"
     );
-}
-
-#[test]
-fn cli_format_reports_unsupported_constructs() {
-    let output = run_cli(["format", "--verify"], "x @ y\n");
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("unsupported construct for formatter"));
 }
 
 #[test]
