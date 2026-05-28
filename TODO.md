@@ -297,14 +297,28 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       (control flow). The rare `ASSIGNMENT_EXPR`-arg-with-comment shape (not
       producible from diagnostic-free input) is kept on legacy via
       `call_comment_path_unsupported`.
+- [x] **Function-definition-as-argument → native IR.** Dropped the
+      `call_has_legacy_function` gate from `ir_call_expr`; a function arg with a
+      brace-token default or a bare body embedding a block no longer routes its
+      *call* through legacy — only the function arg itself falls back, locally,
+      via the function-level gates. To preserve the legacy "hug the prefix"
+      layout (`map(x, function(a = { 1 }) { 1 })`), taught the printer's
+      `first_line_fits` to measure the first line of a multi-line `Verbatim`
+      instead of bailing on `force_break: true`; single-line force-break
+      Verbatims (standalone comments) still fail, so the comment path is
+      unaffected. Deleted `call_has_legacy_function`,
+      `function_expr_needs_legacy`, `arg_is_legacy_function`,
+      `bare_body_embeds_block`, `arg_function_node`. Byte-identical across the
+      air corpus + repo fixtures; idempotent (modulo the pre-existing
+      `air_ok_for_statement` `for`-quirk).
 - [ ] Retire the now-dead string renderers (`format_call_expr`,
       `format_function_expr`, and their param/arg helpers) and the retained
       `fits_inline` / `fits_with_newlines` width helpers (`src/formatter/context.rs`).
-      Comment relocation no longer needs them, but they survive as fallbacks for
-      the function-definition-as-argument path, brace-token param defaults, and the
-      string-based control-flow loop-body / external-body helpers in `rules/`, so
-      they go once those (function-arg migration + brace defaults + control flow)
-      are migrated.
+      Three call sites still keep them alive: `call_comment_path_unsupported`
+      (an `ASSIGNMENT_EXPR`-arg-with-comment edge case, not producible from
+      diagnostic-free input), `function_has_brace_default` (brace-token param
+      defaults), and the `body_ir.contains_forced_break()` fallback (bare
+      control-flow body). They go once those three paths are migrated.
 - [x] **Lift the single-pass printer limit (conditional-group / candidate
       layouts).** Added `Ir::ConditionalGroup(Rc<[Ir]>)` plus a break-aware
       `first_line_fits` measurement to the printer: the printer picks the
