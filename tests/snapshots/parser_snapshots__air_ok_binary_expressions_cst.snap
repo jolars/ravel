@@ -31,15 +31,13 @@ ROOT@0..259
     WHITESPACE@24..25 " "
     INT@25..26 "2"
   NEWLINE@26..27 "\n"
-  BINARY_EXPR@27..34
+  ASSIGNMENT_EXPR@27..33
     INT@27..28 "1"
     WHITESPACE@28..29 " "
-    COLON@29..30 ":"
-    ERROR@30..34
-      ASSIGN_EQ@30..31 "="
-      WHITESPACE@31..32 " "
-      INT@32..33 "2"
-      NEWLINE@33..34 "\n"
+    WALRUS@29..31 ":="
+    WHITESPACE@31..32 " "
+    INT@32..33 "2"
+  NEWLINE@33..34 "\n"
   ASSIGNMENT_EXPR@34..40
     INT@34..35 "1"
     WHITESPACE@35..36 " "

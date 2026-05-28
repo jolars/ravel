@@ -1,0 +1,28 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..28
+  ASSIGNMENT_EXPR@0..6
+    IDENT@0..1 "a"
+    WHITESPACE@1..2 " "
+    WALRUS@2..4 ":="
+    WHITESPACE@4..5 " "
+    INT@5..6 "1"
+  SEMICOLON@6..7 ";"
+  WHITESPACE@7..8 " "
+  ASSIGNMENT_EXPR@8..14
+    INT@8..9 "1"
+    WHITESPACE@9..10 " "
+    WALRUS@10..12 ":="
+    WHITESPACE@12..13 " "
+    INT@13..14 "2"
+  SEMICOLON@14..15 ";"
+  WHITESPACE@15..16 " "
+  ASSIGNMENT_EXPR@16..27
+    IDENT@16..18 "fn"
+    WHITESPACE@18..19 " "
+    WALRUS@19..21 ":="
+    WHITESPACE@21..22 " "
+    IDENT@22..27 "value"
+  NEWLINE@27..28 "\n"

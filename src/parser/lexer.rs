@@ -54,6 +54,7 @@ pub(crate) enum TokKind {
     AssignRight,
     SuperAssignRight,
     AssignEq,
+    Walrus,
     Whitespace,
     Newline,
     Unknown,
@@ -443,6 +444,17 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                     out.push(Token {
                         kind: TokKind::Colon2,
                         text: "::".to_string(),
+                        start: i,
+                        end: i + 2,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                if i + 1 < bytes.len() && &input[i..i + 2] == ":=" {
+                    out.push(Token {
+                        kind: TokKind::Walrus,
+                        text: ":=".to_string(),
                         start: i,
                         end: i + 2,
                     });

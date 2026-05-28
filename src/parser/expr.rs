@@ -16,6 +16,7 @@ fn is_assignment_operator(kind: &TokKind) -> bool {
             | TokKind::AssignRight
             | TokKind::SuperAssignRight
             | TokKind::AssignEq
+            | TokKind::Walrus
     )
 }
 
@@ -381,6 +382,7 @@ fn parse_prefix(
         | TokKind::AssignRight
         | TokKind::SuperAssignRight
         | TokKind::AssignEq
+        | TokKind::Walrus
         | TokKind::Colon
         | TokKind::Or
         | TokKind::Or2

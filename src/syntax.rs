@@ -76,6 +76,7 @@ pub enum SyntaxKind {
     ERROR,
     COMPLEX,
     QUESTION,
+    WALRUS,
 }
 
 impl From<SyntaxKind> for rowan::SyntaxKind {
@@ -164,6 +165,7 @@ impl Language for RLanguage {
             69 => SyntaxKind::ERROR,
             70 => SyntaxKind::COMPLEX,
             71 => SyntaxKind::QUESTION,
+            72 => SyntaxKind::WALRUS,
             _ => SyntaxKind::ERROR,
         }
     }

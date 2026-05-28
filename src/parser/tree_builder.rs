@@ -77,6 +77,7 @@ fn push_token(builder: &mut GreenNodeBuilder<'_>, tok: &Token) {
         TokKind::AssignRight => SyntaxKind::ASSIGN_RIGHT,
         TokKind::SuperAssignRight => SyntaxKind::SUPER_ASSIGN_RIGHT,
         TokKind::AssignEq => SyntaxKind::ASSIGN_EQ,
+        TokKind::Walrus => SyntaxKind::WALRUS,
         TokKind::Whitespace => SyntaxKind::WHITESPACE,
         TokKind::Newline => SyntaxKind::NEWLINE,
         TokKind::Unknown => SyntaxKind::ERROR,

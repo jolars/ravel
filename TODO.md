@@ -269,11 +269,11 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ### Parser
 
-- [ ] **Walrus assignment `:=` is unrecognized.** The token isn't lexed/parsed
-      as an assignment operator; `1 := 2` produces "expected right-hand side
-      for binary operator". Surfaced by the air `binary_expression.R` formatter
-      spec port; blocks `air_binary_expression` from joining the formatter
-      fixture batch.
+- [x] **Walrus assignment `:=`.** Lexed as `TokKind::Walrus` and treated as an
+      assignment-level binary operator (same `(1, 1)` binding power as `<-` /
+      `=`), producing `ASSIGNMENT_EXPR` with a `WALRUS` token. Fixture:
+      `tests/fixtures/parser/expr_walrus`. Unblocks `air_binary_expression` for
+      the formatter fixture batch.
 - [x] **Help operator `?` (with chained forms `??`, `???`, …).** `?` now
       parses as both unary (`?topic`) and binary (`pkg?topic`) at lowest
       precedence (binding power `(0, 1)`, below assignment so `x <- 1 ? 2`
