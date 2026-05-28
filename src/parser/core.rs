@@ -1,3 +1,4 @@
+use crate::parser::bracket_balancer::rebalance_brackets;
 use crate::parser::events::Event;
 use crate::parser::expr::parse_expr;
 use crate::parser::lexer::{TokKind, lex};
@@ -13,7 +14,7 @@ pub struct ParseOutput {
 }
 
 pub fn parse(text: &str) -> ParseOutput {
-    let tokens = lex(text);
+    let tokens = rebalance_brackets(lex(text));
     let mut diagnostics = Vec::new();
     let mut root_events = Vec::new();
 

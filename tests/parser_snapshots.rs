@@ -108,6 +108,7 @@ fn fixture_names() -> &'static [&'static str] {
         "subset2_simple",
         "subset_assignment",
         "subset_missing_close",
+        "subset_nested_close",
         "air_ok_binary_expressions",
         "air_ok_braced_expressions",
         "air_ok_calls",

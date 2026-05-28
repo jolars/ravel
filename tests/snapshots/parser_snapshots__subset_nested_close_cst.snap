@@ -1,0 +1,129 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..420
+  COMMENT@0..76 "# Inner single-bracke ..."
+  NEWLINE@76..77 "\n"
+  COMMENT@77..145 "# `]]` is lexed as on ..."
+  NEWLINE@145..146 "\n"
+  SUBSET_EXPR@146..180
+    IDENT@146..148 "df"
+    LBRACK@148..149 "["
+    ARG_LIST@149..179
+      ARG@149..159
+        BINARY_EXPR@149..159
+          BINARY_EXPR@149..155
+            IDENT@149..151 "df"
+            DOLLAR@151..152 "$"
+            IDENT@152..155 "col"
+          WHITESPACE@155..156 " "
+          GREATER_THAN@156..157 ">"
+          WHITESPACE@157..158 " "
+          INT@158..159 "7"
+      COMMA@159..160 ","
+      WHITESPACE@160..161 " "
+      ARG@161..179
+        SUBSET_EXPR@161..179
+          IDENT@161..164 "map"
+          LBRACK@164..165 "["
+          ARG_LIST@165..178
+            NEWLINE@165..166 "\n"
+            WHITESPACE@166..168 "  "
+            ARG@168..177
+              CALL_EXPR@168..177
+                IDENT@168..173 "names"
+                LPAREN@173..174 "("
+                ARG_LIST@174..176
+                  ARG@174..176
+                    IDENT@174..176 "df"
+                RPAREN@176..177 ")"
+            NEWLINE@177..178 "\n"
+          RBRACK@178..179 "]"
+    RBRACK@179..180 "]"
+  NEWLINE@180..181 "\n"
+  NEWLINE@181..182 "\n"
+  COMMENT@182..223 "# Same shape followed ..."
+  NEWLINE@223..224 "\n"
+  SUBSET_EXPR@224..258
+    IDENT@224..226 "df"
+    LBRACK@226..227 "["
+    ARG_LIST@227..257
+      ARG@227..237
+        BINARY_EXPR@227..237
+          BINARY_EXPR@227..233
+            IDENT@227..229 "df"
+            DOLLAR@229..230 "$"
+            IDENT@230..233 "col"
+          WHITESPACE@233..234 " "
+          GREATER_THAN@234..235 ">"
+          WHITESPACE@235..236 " "
+          INT@236..237 "7"
+      COMMA@237..238 ","
+      WHITESPACE@238..239 " "
+      ARG@239..257
+        SUBSET_EXPR@239..257
+          IDENT@239..242 "map"
+          LBRACK@242..243 "["
+          ARG_LIST@243..256
+            NEWLINE@243..244 "\n"
+            WHITESPACE@244..246 "  "
+            ARG@246..255
+              CALL_EXPR@246..255
+                IDENT@246..251 "names"
+                LPAREN@251..252 "("
+                ARG_LIST@252..254
+                  ARG@252..254
+                    IDENT@252..254 "df"
+                RPAREN@254..255 ")"
+            NEWLINE@255..256 "\n"
+          RBRACK@256..257 "]"
+    RBRACK@257..258 "]"
+  NEWLINE@258..259 "\n"
+  COMMENT@259..277 "# trailing comment"
+  NEWLINE@277..278 "\n"
+  NEWLINE@278..279 "\n"
+  COMMENT@279..328 "# Genuine subset2: `] ..."
+  NEWLINE@328..329 "\n"
+  SUBSET2_EXPR@329..335
+    IDENT@329..330 "x"
+    LBRACK2@330..332 "[["
+    ARG_LIST@332..333
+      ARG@332..333
+        IDENT@332..333 "i"
+    RBRACK2@333..335 "]]"
+  NEWLINE@335..336 "\n"
+  NEWLINE@336..337 "\n"
+  COMMENT@337..373 "# Triple `]`: inner ` ..."
+  NEWLINE@373..374 "\n"
+  SUBSET2_EXPR@374..383
+    IDENT@374..375 "a"
+    LBRACK2@375..377 "[["
+    ARG_LIST@377..381
+      ARG@377..381
+        SUBSET_EXPR@377..381
+          IDENT@377..378 "b"
+          LBRACK@378..379 "["
+          ARG_LIST@379..380
+            ARG@379..380
+              IDENT@379..380 "c"
+          RBRACK@380..381 "]"
+    RBRACK2@381..383 "]]"
+  NEWLINE@383..384 "\n"
+  NEWLINE@384..385 "\n"
+  COMMENT@385..409 "# Inner `[[`, outer `[`."
+  NEWLINE@409..410 "\n"
+  SUBSET_EXPR@410..419
+    IDENT@410..411 "a"
+    LBRACK@411..412 "["
+    ARG_LIST@412..418
+      ARG@412..418
+        SUBSET2_EXPR@412..418
+          IDENT@412..413 "b"
+          LBRACK2@413..415 "[["
+          ARG_LIST@415..416
+            ARG@415..416
+              IDENT@415..416 "c"
+          RBRACK2@416..418 "]]"
+    RBRACK@418..419 "]"
+  NEWLINE@419..420 "\n"

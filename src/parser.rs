@@ -1,3 +1,4 @@
+pub(crate) mod bracket_balancer;
 pub(crate) mod context;
 pub mod core;
 pub(crate) mod cursor;

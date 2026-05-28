@@ -289,12 +289,15 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
       `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the
       air `if_statement.R` port.
-- [ ] **Newline between subset args breaks parsing in some contexts.**
-      `dt[, j\n  , by = col]` and inner `map[\n  names(df)\n]` followed by a
-      comment block report "expected ',' between subset arguments" / "expected
-      closing bracket". The same fragments parse standalone; the failure is
-      context-dependent on surrounding trivia. Surfaced by the air `subset.R`
-      port.
+- [x] **Newline between subset args breaks parsing in some contexts.**
+      Root cause: the lexer greedily merges `]]` into a single `RBrack2`, so
+      `df[df$col > 7, map[\n  names(df)\n]]` had the inner single-bracket
+      subset eat both `]`s and the outer `df[` ran off looking for a close ---
+      the "expected closing bracket" / "expected ',' between subset arguments"
+      errors were the cascade. Fixed by adding a token rebalancing pass
+      (`src/parser/bracket_balancer.rs`) that re-groups runs of `]`s based on
+      the open `[` / `[[` stack. Fixture:
+      `tests/fixtures/parser/subset_nested_close`.
 
 ### Formatter
 
