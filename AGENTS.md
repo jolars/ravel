@@ -1,6 +1,7 @@
-# CLAUDE.md
+# Agent Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this
+repository.
 
 ## Project
 
@@ -19,15 +20,19 @@ includes `R`.
 ## Tenets
 
 1. **Deterministic, rule-based formatting.** Output is decided solely by the
-   formatter's rules and the layout engine. Unlike air (ravel's closest
-   relative), ravel does **not** honor "persistent line breaks" — the input's
-   existing line breaks never influence the result.
+   formatter's rules and the layout engine. Push back against attempts to
+   hard-code special cases or exceptions for specific constructs. Unlike air
+   (ravel's closest relative), ravel does **not** honor "persistent line breaks"
+   --- the input's existing line breaks never influence the result.
 2. **Incremental parsing is first-class**, not an afterthought. Parser/CST work
    must keep the `salsa`-based incremental reparse path (`src/incremental.rs`)
    viable.
 3. **Parsing is the parser's job.** Never paper over parser mistakes in the
    formatter, and never let parsing logic creep into the formatter. If the
    formatter hits something the parser handled wrong, fix it in the parser.
+4. **Losslessness is the parser's job.** The parser must preserve all text
+   (whitespace, comments, etc.) so that `reconstruct(text)` is always `text`.
+   The formatter can assume the CST is lossless and focus on formatting logic.
 
 ## Commands
 
@@ -52,10 +57,11 @@ cargo run -- format --verify <file.R>        # check idempotence; does not write
 cargo run -- lint --check docs/              # lint currently REQUIRES --check
 ```
 
-Snapshot tests use `insta`: review/accept with `cargo insta review` / `cargo insta accept`.
-Logging honors `RUST_LOG` (e.g. `RUST_LOG=debug cargo test`) via `env_logger`.
-`task <name>` (Taskfile.yml) wraps the above: `lint`, `format`, `test`,
-`test-debug`, `audit`, `deny`, `docs-preview`.
+Snapshot tests use `insta`: review/accept with `cargo insta review` /
+`cargo insta accept`. Logging honors `RUST_LOG` (e.g.
+`RUST_LOG=debug cargo test`) via `env_logger`. `task <name>` (Taskfile.yml)
+wraps the above: `lint`, `format`, `test`, `test-debug`, `audit`, `deny`,
+`docs-preview`.
 
 ## Architecture
 
@@ -75,7 +81,7 @@ build_tree (tree_builder.rs) → rowan SyntaxNode (CST)
 - **Losslessness is the core invariant:** all whitespace, newlines, comments,
   and `%...%`/`[[`/`]]` tokens are preserved; `reconstruct(text)` must equal
   `text`. Parser work prioritizes stable, recoverable CST shape over early
-  semantic precision. Semantics stay **static** — no R evaluation.
+  semantic precision. Semantics stay **static** --- no R evaluation.
 - `src/ast/nodes.rs` (`src/ast.rs`) provides zero-cost typed AST wrappers over
   the CST using rowan's `AstNode` support (e.g. `AssignmentExpr`, `IfExpr`,
   `FunctionExpr`).
@@ -87,8 +93,8 @@ CST and uses a Wadler/Prettier-style document IR (`ir.rs`) printed by a single
 best-fit layout engine (`printer.rs`) that makes all line-break decisions.
 `rules/` builds the IR per construct; `core.rs` exposes `format` /
 `format_with_style`; `check.rs` exposes `check_paths`; `style.rs` is
-`FormatStyle`; `trivia.rs`/`context.rs`/`render.rs` are support.
-Target style is the tidyverse R style guide. Note (per `TODO.md` follow-ups):
+`FormatStyle`; `trivia.rs`/`context.rs`/`render.rs` are support. Target style is
+the tidyverse R style guide. Note (per `TODO.md` follow-ups):
 subset/call/function arg-lists are still bridged into the IR via `Verbatim`
 using legacy string-based wrapping, pending native IR re-implementation.
 
@@ -105,17 +111,17 @@ block linting a file. Largely a placeholder ahead of Phase 6.
   cross-platform build/test, `cargo-audit` + `cargo-deny`, clippy `-D warnings`,
   rustfmt check, and `format --check docs/` + `lint --check docs/`.
 - Formatter output must be **idempotent** (`format(format(x)) == format(x)`);
-  the formatter and parser test suites guard losslessness + idempotence —
+  the formatter and parser test suites guard losslessness + idempotence ---
   byte-identical output is the bar for "behavior-preserving" refactors.
-- Dependency changes must stay compatible with `cargo-audit` and
-  `cargo-deny` (`deny.toml`).
+- Dependency changes must stay compatible with `cargo-audit` and `cargo-deny`
+  (`deny.toml`).
 
 ## Commits & versioning
 
 - **Conventional Commits** (`type(scope): subject`) and **semantic versioning**.
 - Subject line: aim for ≤ 60 chars, ≤ 72 is fine, longer only if truly needed.
 - Bodies are short and to the point.
-- **Never edit the changelog by hand** — `versionary` generates it.
+- **Never edit the changelog by hand** --- `versionary` generates it.
 
 ## Testing layout
 
@@ -123,20 +129,23 @@ block linting a file. Largely a placeholder ahead of Phase 6.
 it pass. For a bug, always start by adding a failing test that reproduces it
 (typically a new fixture case or snapshot) before touching the fix.
 
-- Integration tests in `tests/*.rs`; fixtures in `tests/fixtures/{parser,formatter}/<case>/`.
-  Parser fixtures hold `input.R` (snapshot the CST + diagnostics, assert
-  losslessness); formatter fixtures hold `input.R` + `expected.R`.
+- Integration tests in `tests/*.rs`; fixtures in
+  `tests/fixtures/{parser,formatter}/<case>/`. Parser fixtures hold `input.R`
+  (snapshot the CST + diagnostics, assert losslessness); formatter fixtures hold
+  `input.R` + `expected.R`.
 - `insta` snapshots live in `tests/snapshots/`.
 - `tests/air_parser_harness.rs` compares against the `air_r_parser` crate (a git
-  dev-dependency from posit-dev/air) — AIR snapshot cases are ported into the
+  dev-dependency from posit-dev/air) --- AIR snapshot cases are ported into the
   parser fixtures as hardening input.
 
 ## Reference-only directories (not part of the build, untracked)
 
-- `air/` — a local checkout of posit-dev/air (tree-sitter-based R tooling) kept
-  for reference/comparison. **Not** in the Cargo build and not exposed via this
+- `air/` --- a local checkout of posit-dev/air (tree-sitter-based R tooling)
+  kept for reference/comparison. **Not** in the Cargo build and not exposed via
+  this
   CLI. It has its own `air/CLAUDE.md` describing *that* project's conventions
-  (e.g. `just test`, `air.toml`) — do not apply those to ravel.
-- `style/` — vendored copy of the tidyverse R style guide (the formatter's
+       (e.g. `just test`, `air.toml`) --- do not apply those to ravel.
+- `style/` --- vendored copy of the tidyverse R style guide (the formatter's
   target style).
-- `docs/` — Quarto site (`task docs-preview`); CI formats/lints it as a corpus.
+- `docs/` --- Quarto site (`task docs-preview`); CI formats/lints it as a
+  corpus.
