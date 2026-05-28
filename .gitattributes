@@ -10,3 +10,5 @@ tests/**/snapshots/**/* eol=lf
 # Preserve line ending fixtures as-is (CRLF/LF)
 tests/fixtures/parser/crlf_*/* -text
 tests/fixtures/parser/lf_*/* -text
+tests/fixtures/parser/*_crlf_*/* -text
+tests/fixtures/parser/*_lf_*/* -text
