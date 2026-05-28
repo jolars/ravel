@@ -202,6 +202,15 @@ impl Printer {
                 Ir::HardLine | Ir::EmptyLine => return hug,
                 Ir::Verbatim { text, force_break } => {
                     if *force_break {
+                        // A multi-line force-break verbatim (e.g. a brace-token
+                        // param default) carries its own embedded line breaks
+                        // and behaves like a HardLine for hugging: the prefix
+                        // up to its own first newline is what needs to fit.
+                        // A single-line force-break (a standalone comment) still
+                        // fails — a comment in the prefix forbids the hug.
+                        if hug && text.contains('\n') {
+                            return true;
+                        }
                         return false;
                     }
                     let w = text.chars().count();
