@@ -38,6 +38,5 @@ language-servers = ["ravel"]
 formatter = { command = "ravel", args = ["format"] }
 ```
 
-Neovim (with `nvim-lspconfig` or a custom client) should launch
-`ravel lsp` for files with the `r` filetype and request formatting via
-`vim.lsp.buf.format()`.
+Neovim (with `nvim-lspconfig` or a custom client) should launch `ravel lsp` for
+files with the `r` filetype and request formatting via `vim.lsp.buf.format()`.
