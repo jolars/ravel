@@ -85,6 +85,7 @@ fn fixture_names() -> &'static [&'static str] {
         "if_missing_then_expr",
         "if_missing_else_expr",
         "if_dangling_else",
+        "if_comment_in_condition",
         "for_simple",
         "for_newline_body",
         "for_missing_in",

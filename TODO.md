@@ -284,10 +284,16 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
       consecutive `?`-headed lines are still merged across newlines and
       formatter idempotence is not guaranteed for them --- same root cause as
       the unary `~` follow-up below.
-- [ ] **Comments inside `if (...)` condition break parsing.**
-      `if (\n  a\n  # c\n) { ... }` reports "expected ')' after if condition";
-      `if # c\n(a) TRUE` reports "expected '(' after 'if'". Surfaced by the air
-      `if_statement.R` port.
+- [x] **Comments inside `if (...)` condition break parsing.** Root cause:
+      `parse_if_expr` was skipping only whitespace/newlines (not comments) when
+      hunting for the `(`, `)`, and then-body around an `if` clause, so a
+      comment between any of those landed on a comment and tripped "expected
+      '(' after 'if'" / "expected ')' after if condition". Fixed by routing the
+      `if` clause through the consolidated `skip_clause_trivia` helper (the
+      same helper `while`/`for` already use) at every clause boundary, which
+      also cleans up the previously bespoke comment-skip loops before `else`.
+      Fixture: `tests/fixtures/parser/if_comment_in_condition`; the air port
+      `air_ok_if_statement` now parses without diagnostics.
 - [x] **Newline between subset args breaks parsing in some contexts.** Root
       cause: the lexer greedily merges `]]` into a single `RBrack2`, so
       `df[df$col > 7, map[\n  names(df)\n]]` had the inner single-bracket subset

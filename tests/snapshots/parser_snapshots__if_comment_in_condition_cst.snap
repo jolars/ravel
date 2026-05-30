@@ -1,0 +1,53 @@
+---
+source: tests/parser_snapshots.rs
+expression: tree
+---
+ROOT@0..112
+  IF_EXPR@0..39
+    IF_KW@0..2 "if"
+    WHITESPACE@2..3 " "
+    LPAREN@3..4 "("
+    NEWLINE@4..5 "\n"
+    WHITESPACE@5..7 "  "
+    IDENT@7..8 "a"
+    NEWLINE@8..9 "\n"
+    WHITESPACE@9..11 "  "
+    COMMENT@11..29 "# trailing comment"
+    NEWLINE@29..30 "\n"
+    RPAREN@30..31 ")"
+    WHITESPACE@31..32 " "
+    BLOCK_EXPR@32..39
+      LBRACE@32..33 "{"
+      NEWLINE@33..34 "\n"
+      WHITESPACE@34..36 "  "
+      IDENT@36..37 "b"
+      NEWLINE@37..38 "\n"
+      RBRACE@38..39 "}"
+  NEWLINE@39..40 "\n"
+  NEWLINE@40..41 "\n"
+  IF_EXPR@41..74
+    IF_KW@41..43 "if"
+    WHITESPACE@43..44 " "
+    COMMENT@44..61 "# leading comment"
+    NEWLINE@61..62 "\n"
+    WHITESPACE@62..64 "  "
+    LPAREN@64..65 "("
+    IDENT@65..66 "a"
+    RPAREN@66..67 ")"
+    NEWLINE@67..68 "\n"
+    WHITESPACE@68..70 "  "
+    IDENT@70..74 "TRUE"
+  NEWLINE@74..75 "\n"
+  NEWLINE@75..76 "\n"
+  IF_EXPR@76..111
+    IF_KW@76..78 "if"
+    WHITESPACE@78..79 " "
+    LPAREN@79..80 "("
+    IDENT@80..81 "a"
+    RPAREN@81..82 ")"
+    WHITESPACE@82..83 " "
+    COMMENT@83..104 "# comment before then"
+    NEWLINE@104..105 "\n"
+    WHITESPACE@105..107 "  "
+    IDENT@107..111 "TRUE"
+  NEWLINE@111..112 "\n"
