@@ -76,4 +76,6 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
     },
+    /// Run the language server over stdio (formatting only)
+    Lsp,
 }

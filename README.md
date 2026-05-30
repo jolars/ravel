@@ -17,3 +17,27 @@ To format your code, you can use:
 To lint your code, you can use:
 
 - `ravel lint --check <path> [<path> ...]`
+
+## Editor integration
+
+`ravel lsp` starts a stdio-based language server. It currently advertises only
+formatting (`textDocument/formatting`); diagnostics and other capabilities are
+not implemented yet. Configuration is read from `ravel.toml` discovered from
+each file's parent directory, matching the CLI.
+
+Helix example (`~/.config/helix/languages.toml`):
+
+```toml
+[language-server.ravel]
+command = "ravel"
+args = ["lsp"]
+
+[[language]]
+name = "r"
+language-servers = ["ravel"]
+formatter = { command = "ravel", args = ["format"] }
+```
+
+Neovim (with `nvim-lspconfig` or a custom client) should launch
+`ravel lsp` for files with the `r` filetype and request formatting via
+`vim.lsp.buf.format()`.

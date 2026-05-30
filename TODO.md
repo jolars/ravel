@@ -471,6 +471,13 @@ parser + formatter foundation, and ahead of the LSP/linter phases.
 
 ## Phase 6: Linter and LSP integration (deferred)
 
+- [x] Minimal LSP exposing `textDocument/formatting` over stdio
+      (`ravel lsp`), reusing `format_with_style` and per-file `ravel.toml`
+      discovery.
 - [ ] Add semantic layers: symbols, scopes, and lightweight inference.
 - [ ] Build diagnostics and lint passes on CST + semantic model.
-- [ ] Integrate with `tower-lsp-server` for IDE features.
+- [ ] Wire diagnostics into the LSP (`textDocument/publishDiagnostics`).
+- [ ] Range formatting (`textDocument/rangeFormatting`) once the formatter
+      gains a range API.
+- [ ] Honor editor-supplied `initializationOptions` /
+      `workspace/didChangeConfiguration` for `line-width` / `indent-width`.

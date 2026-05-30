@@ -39,7 +39,23 @@ fn main() -> ExitCode {
             &config_source,
         ),
         Commands::Lint { paths, check } => run_lint(paths, check, &config_source),
+        Commands::Lsp => run_lsp(),
     }
+}
+
+fn run_lsp() -> ExitCode {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("error: failed to start LSP runtime: {err}");
+            return ExitCode::from(2);
+        }
+    };
+    runtime.block_on(ravel::lsp::run());
+    ExitCode::SUCCESS
 }
 
 struct ConfigSource {
