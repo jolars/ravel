@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod cli;
+pub mod config;
 pub mod file_discovery;
 pub mod formatter;
 pub mod incremental;

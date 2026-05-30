@@ -252,14 +252,27 @@ fixture/idempotence/round-trip suite).
 
 ## Phase 5.5: Project configuration (TOML, Ruff-inspired)
 
-- [ ] Define `ravel.toml` configuration schema and defaults (human-friendly,
+Done: `ravel.toml` v1 lives in `src/config.rs` with kebab-case keys, strict
+`deny_unknown_fields`, and a tiny `[format]` (`line-width`, `indent-width`) +
+empty `[lint]` schema. The CLI gained global `--config <PATH>` and
+`--no-config` (mutually exclusive) and per-`format` `--line-width` /
+`--indent-width` overrides. Discovery walks cwd → ancestors looking for
+`ravel.toml`, stops at the first match or at a `.git` boundary. Config loading
+lives in `main.rs` only — the library API (`format_with_style`,
+`check_paths_with_style`, `linter::check_paths_with_config`) continues to take
+a fully-resolved style/config so `format()` stays pure. The repo root carries
+a dogfood `ravel.toml` documenting the defaults. Errors render
+`path:line:col: <toml message>` for parse failures and
+`path: invalid <field>: <reason>` for value validation.
+
+- [x] Define `ravel.toml` configuration schema and defaults (human-friendly,
       explicit, and forward-compatible).
-- [ ] Support configuration discovery hierarchy (cwd -> parent dirs) and
+- [x] Support configuration discovery hierarchy (cwd -> parent dirs) and
       precedence with CLI flags.
-- [ ] Add sections for formatter and linter settings (start minimal,
+- [x] Add sections for formatter and linter settings (start minimal,
       expandable).
-- [ ] Validate and report configuration errors with clear file/field context.
-- [ ] Add tests for config parsing, discovery, precedence, and invalid files.
+- [x] Validate and report configuration errors with clear file/field context.
+- [x] Add tests for config parsing, discovery, precedence, and invalid files.
 
 ## Known issues / follow-ups
 

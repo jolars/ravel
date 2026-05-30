@@ -3,7 +3,7 @@ use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 
-use super::{FormatError, format};
+use super::{FormatError, FormatStyle, format_with_style};
 use crate::file_discovery::{FileDiscoveryError, collect_r_files};
 use crate::incremental::{IncrementalDatabase, SourceFile};
 
@@ -67,6 +67,13 @@ impl From<FileDiscoveryError> for CheckError {
 }
 
 pub fn check_paths(paths: &[PathBuf]) -> Result<CheckResult, CheckError> {
+    check_paths_with_style(paths, FormatStyle::default())
+}
+
+pub fn check_paths_with_style(
+    paths: &[PathBuf],
+    style: FormatStyle,
+) -> Result<CheckResult, CheckError> {
     if paths.is_empty() {
         return Err(CheckError::MissingPaths);
     }
@@ -99,10 +106,11 @@ pub fn check_paths(paths: &[PathBuf]) -> Result<CheckResult, CheckError> {
         };
 
         let _ = db.parse(file);
-        let formatted = format(&content).map_err(|err| CheckError::FormatError {
-            path: path.clone(),
-            source: err,
-        })?;
+        let formatted =
+            format_with_style(&content, style).map_err(|err| CheckError::FormatError {
+                path: path.clone(),
+                source: err,
+            })?;
         if formatted != content {
             changed_files.push(path);
         }

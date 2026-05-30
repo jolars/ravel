@@ -3,6 +3,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::config::LintConfig;
 use crate::file_discovery::{FileDiscoveryError, collect_r_files};
 use crate::incremental::{IncrementalDatabase, SourceFile};
 use crate::parser::lexer::{TokKind, Token, lex};
@@ -89,6 +90,13 @@ impl From<FileDiscoveryError> for LintError {
 }
 
 pub fn check_paths(paths: &[PathBuf]) -> Result<LintResult, LintError> {
+    check_paths_with_config(paths, &LintConfig::default())
+}
+
+pub fn check_paths_with_config(
+    paths: &[PathBuf],
+    _config: &LintConfig,
+) -> Result<LintResult, LintError> {
     if paths.is_empty() {
         return Err(LintError::MissingPaths);
     }
