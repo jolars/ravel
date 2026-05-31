@@ -17,7 +17,7 @@ categories = [
 ]
 
 [dependencies]
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 env_logger = "0.11.10"
 globset = "0.4.18"
 ignore = "0.4.25"
@@ -45,7 +45,7 @@ insta = "1.47.2"
 air_r_parser = { git = "https://github.com/posit-dev/air", rev = "4cbd36d552e27d8930cff1602d56bfd9ce4c1ed1" }
 
 [build-dependencies]
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 clap-markdown = "0.1.5"
 clap_complete = "4.6.5"
 clap_mangen = "0.3.0"
