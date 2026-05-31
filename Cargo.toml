@@ -24,7 +24,7 @@ ignore = "0.4.25"
 log = { version = "0.4.29", features = ["release_max_level_info"] }
 rayon = "1.11.0"
 rowan = "0.16.1"
-salsa = "0.26.0"
+salsa = "0.26.2"
 serde = { version = "1.0.228", features = ["derive"] }
 tempfile = "3.27.0"
 tokio = { version = "1.52.3", features = [
